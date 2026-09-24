@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Мой почерк — печатный текст в рукописный</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="margin-rule" aria-hidden="true"></div>
+
+<header class="topbar">
+  <h1 class="brand">Мой почерк</h1>
+  <div id="user-box" class="user-box hidden">
+    <span id="username-label"></span>
+    <button id="logout-btn" class="btn-link" type="button">Выйти</button>
+  </div>
+</header>
+
+<main id="auth-view" class="view">
+  <section class="card auth-card">
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="login" type="button">Вход</button>
+      <button class="tab-btn" data-tab="register" type="button">Регистрация</button>
+    </div>
+
+    <form id="login-form" class="auth-form">
+      <label>Имя пользователя
+        <input type="text" name="username" autocomplete="username" required>
+      </label>
+      <label>Пароль
+        <input type="password" name="password" autocomplete="current-password" required>
+      </label>
+      <p class="error-msg" id="login-error"></p>
+      <button type="submit" class="btn-primary">Войти</button>
+    </form>
+
+    <form id="register-form" class="auth-form hidden">
+      <label>Имя пользователя
+        <input type="text" name="username" autocomplete="username" minlength="3" required>
+      </label>
+      <label>Пароль (от 6 символов)
+        <input type="password" name="password" autocomplete="new-password" minlength="6" required>
+      </label>
+      <p class="error-msg" id="register-error"></p>
+      <button type="submit" class="btn-primary">Создать аккаунт</button>
+    </form>
+  </section>
+
+  <p class="hint intro-hint">
+    Запишите несколько своих букв — программа запомнит ваш почерк.
+    Дальше можно вставить текст или загрузить фото страницы, и сайт напишет его вашей рукой.
+  </p>
+</main>
+
+<main id="app-view" class="view hidden">
+  <nav class="tabs main-tabs">
+    <button class="tab-btn active" data-view="train" type="button">Обучение почерку</button>
+    <button class="tab-btn" data-view="generate" type="button">Написать текст</button>
+  </nav>
+
+  <section id="train-view" class="tab-panel">
+    <div class="card">
+      <div class="progress-row">
+        <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
+        <span id="progress-label" class="progress-label">0 / 0</span>
+      </div>
+
+      <div class="letter-stage">
+        <p class="stage-caption">Напишите букву так, как пишете её обычно:</p>
+        <div class="canvas-wrap">
+          <canvas id="guide-canvas" width="260" height="260"></canvas>
+          <canvas id="draw-canvas" width="260" height="260"></canvas>
+        </div>
+        <div class="canvas-actions">
+          <button id="clear-btn" class="btn-secondary" type="button">Очистить</button>
+          <button id="skip-btn" class="btn-secondary" type="button">Пропустить →</button>
+          <button id="save-letter-btn" class="btn-primary" type="button">Сохранить и дальше →</button>
+        </div>
+        <p id="train-msg" class="hint"></p>
+      </div>
+    </div>
+
+    <div class="card">
+      <p class="hint">Нажмите на букву, чтобы записать её заново</p>
+      <div id="letters-grid" class="letters-grid"></div>
+    </div>
+  </section>
+
+  <section id="generate-view" class="tab-panel hidden">
+    <div class="card">
+      <p class="field-label">Бумага</p>
+      <div id="paper-options" class="paper-options"></div>
+
+      <div class="font-size-section">
+        <p class="field-label">Размер текста</p>
+        <div id="font-size-options" class="font-size-options"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="tabs">
+        <button class="tab-btn active" data-source="text" type="button">Ввести текст</button>
+        <button class="tab-btn" data-source="photo" type="button">Загрузить фото</button>
+      </div>
+
+      <div id="source-text" class="source-panel">
+        <textarea id="text-input" rows="6" placeholder="Введите или вставьте текст..."></textarea>
+        <button id="generate-text-btn" class="btn-primary" type="button">Написать моим почерком</button>
+      </div>
+
+      <div id="source-photo" class="source-panel hidden">
+        <input type="file" id="photo-input" accept="image/*">
+        <button id="recognize-btn" class="btn-primary" type="button">Распознать и написать</button>
+        <div id="recognized-box" class="hidden">
+          <label>Распознанный текст (можно исправить)</label>
+          <textarea id="recognized-text" rows="5"></textarea>
+          <button id="generate-recognized-btn" class="btn-secondary" type="button">Написать этим текстом заново</button>
+        </div>
+      </div>
+
+      <p id="generate-msg" class="hint"></p>
+    </div>
+
+    <div id="result-card" class="card hidden">
+      <h2>Готово</h2>
+      <img id="result-image" alt="Текст, написанный вашим почерком" class="result-image">
+      <div class="result-actions">
+        <a id="download-png" class="btn-secondary" download>Скачать PNG</a>
+        <a id="download-pdf" class="btn-primary" download>Скачать PDF</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

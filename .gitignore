@@ -1,0 +1,29 @@
+# Environments
+backend/venv/
+venv/
+.venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+backend/__pycache__/
+backend/**/__pycache__/
+
+# User data & databases
+backend/uploads/
+backend/generated/
+backend/handwriting.db
+*.db
+*.sqlite3
+
+# Environment variables & secrets
+backend/.env
+.env
+.env.local
+
+# OS & Logs
+.DS_Store
+Thumbs.db
+*.log
