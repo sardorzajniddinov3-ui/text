@@ -27,6 +27,11 @@ class Config:
     # Ключ Google Cloud Vision API для распознавания текста на фото (OCR)
     GOOGLE_VISION_API_KEY = os.environ.get("GOOGLE_VISION_API_KEY", "")
 
+    # Supabase (для Storage и Admin API)
+    SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+    SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
+
+
     # Ограничение на размер загружаемого фото (10 МБ)
     MAX_CONTENT_LENGTH = 10 * 1024 * 1024
 

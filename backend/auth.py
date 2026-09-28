@@ -52,5 +52,5 @@ def logout():
 @auth_bp.get("/me")
 def me():
     if current_user.is_authenticated:
-        return jsonify(id=current_user.id, username=current_user.username)
+        return jsonify(id=current_user.id, username=current_user.username, is_admin=current_user.is_admin)
     return jsonify(None)

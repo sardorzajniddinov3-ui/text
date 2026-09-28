@@ -86,6 +86,8 @@
     appView.classList.remove("hidden");
     userBox.classList.remove("hidden");
     usernameLabel.textContent = user.username;
+    const adminBtn = document.getElementById('admin-btn');
+    if (adminBtn) adminBtn.classList.toggle('hidden', !user.is_admin);
     await initTraining();
     await initPapers();
   }
@@ -224,33 +226,73 @@
   }
 
   function drawGuide(char) {
-    guideCtx.clearRect(0, 0, guideCanvas.width, guideCanvas.height);
+    const W = guideCanvas.width;
+    const H = guideCanvas.height;
+    guideCtx.clearRect(0, 0, W, H);
 
-    // Вспомогательные направляющие строчки как в прописях
+    // Направляющие линии как в прописях
+    const yTop    = Math.round(H * 0.18);  // верх заглавных букв
+    const yMid    = Math.round(H * 0.42);  // верх строчных (x-height)
+    const yBase   = Math.round(H * 0.68);  // базовая линия -- пишем по ней
+    const yBottom = Math.round(H * 0.88);  // низ выносных (g, y, р, д)
+
+    const xPad = 10;
     guideCtx.save();
-    guideCtx.strokeStyle = "rgba(70, 110, 180, 0.20)";
+
+    // Верхняя линия (заглавные) -- синяя пунктир
+    guideCtx.strokeStyle = "rgba(100, 149, 237, 0.40)";
     guideCtx.lineWidth = 1;
-    guideCtx.setLineDash([4, 4]);
-
-    // Верхняя линия для строчных букв
+    guideCtx.setLineDash([5, 5]);
     guideCtx.beginPath();
-    guideCtx.moveTo(12, 120);
-    guideCtx.lineTo(guideCanvas.width - 12, 120);
+    guideCtx.moveTo(xPad, yTop);
+    guideCtx.lineTo(W - xPad, yTop);
     guideCtx.stroke();
 
-    // Базовая линия строки
-    guideCtx.strokeStyle = "rgba(70, 110, 180, 0.35)";
+    // Верхняя линия строчных (x-height) -- синяя сплошная
+    guideCtx.strokeStyle = "rgba(100, 149, 237, 0.55)";
+    guideCtx.lineWidth = 1.2;
+    guideCtx.setLineDash([]);
     guideCtx.beginPath();
-    guideCtx.moveTo(12, 180);
-    guideCtx.lineTo(guideCanvas.width - 12, 180);
+    guideCtx.moveTo(xPad, yMid);
+    guideCtx.lineTo(W - xPad, yMid);
     guideCtx.stroke();
+
+    // Базовая линия -- красная, главная
+    guideCtx.strokeStyle = "rgba(220, 53, 69, 0.75)";
+    guideCtx.lineWidth = 2;
+    guideCtx.setLineDash([]);
+    guideCtx.beginPath();
+    guideCtx.moveTo(xPad, yBase);
+    guideCtx.lineTo(W - xPad, yBase);
+    guideCtx.stroke();
+
+    // Нижняя линия выносных -- синяя пунктир
+    guideCtx.strokeStyle = "rgba(100, 149, 237, 0.35)";
+    guideCtx.lineWidth = 1;
+    guideCtx.setLineDash([3, 6]);
+    guideCtx.beginPath();
+    guideCtx.moveTo(xPad, yBottom);
+    guideCtx.lineTo(W - xPad, yBottom);
+    guideCtx.stroke();
+
     guideCtx.restore();
 
+    // Буква-образец (прописная рукописная подсказка как в школьных прописях)
+    guideCtx.save();
     guideCtx.fillStyle = "rgba(34, 40, 59, 0.16)";
-    guideCtx.font = "180px 'Times New Roman', serif";
+    guideCtx.font = Math.round(H * 0.60) + "px 'Marck Script', 'Caveat', cursive";
     guideCtx.textAlign = "center";
-    guideCtx.textBaseline = "middle";
-    guideCtx.fillText(char, guideCanvas.width / 2, guideCanvas.height / 2 + 6);
+    guideCtx.textBaseline = "alphabetic";
+    guideCtx.fillText(char, W / 2, yBase);
+    guideCtx.restore();
+  }
+
+  if (document.fonts) {
+    document.fonts.load("120px 'Marck Script'").then(() => {
+      if (alphabet && alphabet[currentIndex]) {
+        drawGuide(alphabet[currentIndex]);
+      }
+    }).catch(() => {});
   }
 
   async function initTraining() {
@@ -508,4 +550,100 @@
 
   // ---------- Init ----------
   checkSession();
+
+  // ===================================================================
+  // Admin Panel
+  // ===================================================================
+  const adminPanel  = document.getElementById('admin-panel');
+  const adminClose  = document.getElementById('admin-close');
+  const adminRefresh = document.getElementById('admin-refresh');
+  const adminUsersBody = document.getElementById('admin-users-body');
+  const adminMsg    = document.getElementById('admin-msg');
+  const statUsers   = document.getElementById('stat-users');
+  const statSamples = document.getElementById('stat-samples');
+  const statAdmins  = document.getElementById('stat-admins');
+
+  async function loadAdminStats() {
+    try {
+      const r = await fetch('/api/admin/stats', { credentials: 'include' });
+      if (!r.ok) return;
+      const d = await r.json();
+      statUsers.textContent   = d.total_users;
+      statSamples.textContent = d.total_samples;
+      statAdmins.textContent  = d.admin_users;
+    } catch (e) { /* ignore */ }
+  }
+
+  async function loadAdminUsers() {
+    if (!adminMsg || !adminUsersBody) return;
+    adminMsg.textContent = 'Загрузка...';
+    adminUsersBody.innerHTML = '';
+    try {
+      const r = await fetch('/api/admin/users', { credentials: 'include' });
+      if (!r.ok) { adminMsg.textContent = 'Ошибка загрузки'; return; }
+      const d = await r.json();
+      adminMsg.textContent = '';
+      d.users.forEach(u => {
+        const tr = document.createElement('tr');
+        const date = u.created_at ? new Date(u.created_at).toLocaleDateString('ru-RU') : '—';
+        const roleTag = u.is_admin
+          ? '<span class="tag-admin">Админ</span>'
+          : '<span class="tag-user">Пользователь</span>';
+        tr.innerHTML =
+          '<td>' + u.id + '</td>' +
+          '<td class="username">' + u.username + '</td>' +
+          '<td>' + u.sample_count + '</td>' +
+          '<td>' + date + '</td>' +
+          '<td>' + roleTag + '</td>' +
+          '<td class="admin-actions">' +
+            '<button class="btn-warning-sm" data-action="clear" data-uid="' + u.id + '">🗑 Буквы</button>' +
+            (!u.is_admin ? '<button class="btn-danger-sm" data-action="delete" data-uid="' + u.id + '">✕ Удалить</button>' : '') +
+          '</td>';
+        adminUsersBody.appendChild(tr);
+      });
+
+      adminUsersBody.querySelectorAll('[data-action]').forEach(function(btn) {
+        btn.addEventListener('click', async function() {
+          const uid = btn.dataset.uid;
+          const action = btn.dataset.action;
+          if (action === 'delete') {
+            if (!confirm('Удалить пользователя и все его данные?')) return;
+            await fetch('/api/admin/users/' + uid, { method: 'DELETE', credentials: 'include' });
+          } else if (action === 'clear') {
+            if (!confirm('Очистить все образцы букв этого пользователя?')) return;
+            await fetch('/api/admin/users/' + uid + '/samples', { method: 'DELETE', credentials: 'include' });
+          }
+          await loadAdminStats();
+          await loadAdminUsers();
+        });
+      });
+    } catch (e) {
+      adminMsg.textContent = 'Ошибка: ' + e.message;
+    }
+  }
+
+  async function openAdminPanel() {
+    if (!adminPanel) return;
+    adminPanel.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    await Promise.all([loadAdminStats(), loadAdminUsers()]);
+  }
+
+  function closeAdminPanel() {
+    if (!adminPanel) return;
+    adminPanel.classList.add('hidden');
+    document.body.style.overflow = '';
+  }
+
+  const adminBtnEl = document.getElementById('admin-btn');
+  if (adminBtnEl) adminBtnEl.addEventListener('click', openAdminPanel);
+  if (adminClose) adminClose.addEventListener('click', closeAdminPanel);
+  if (adminRefresh) adminRefresh.addEventListener('click', async function() {
+    await loadAdminStats();
+    await loadAdminUsers();
+  });
+  if (adminPanel) adminPanel.addEventListener('click', function(e) {
+    if (e.target === adminPanel) closeAdminPanel();
+  });
+
 })();

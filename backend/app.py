@@ -7,6 +7,7 @@ from flask_login import LoginManager
 from auth import auth_bp
 from config import Config
 from generate import generate_bp
+from admin import admin_bp
 from models import User, db
 from samples import samples_bp
 
@@ -40,6 +41,7 @@ def create_app():
     app.register_blueprint(auth_bp)
     app.register_blueprint(samples_bp)
     app.register_blueprint(generate_bp)
+    app.register_blueprint(admin_bp)
 
     with app.app_context():
         db.create_all()
