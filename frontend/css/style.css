@@ -733,3 +733,372 @@ a.btn-primary, a.btn-secondary {
   color: #94a3b8;
   min-height: 1.2em;
 }
+
+/* ==========================================================================
+   Слитный почерк и связки букв (Cursive training & Ligatures)
+   ========================================================================== */
+
+.sub-tabs {
+  margin-bottom: 20px;
+  background: rgba(34, 40, 59, 0.04);
+  padding: 4px;
+  border-radius: 10px;
+}
+
+.sub-tabs .tab-btn {
+  font-size: 0.95rem;
+  padding: 8px 16px;
+  border-radius: 7px;
+}
+
+.sub-tabs .tab-btn.active {
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.cursive-header {
+  margin-bottom: 20px;
+}
+
+.cursive-title {
+  font-family: var(--font-display);
+  font-size: 1.7rem;
+  color: var(--ink);
+  margin: 0 0 6px 0;
+}
+
+.cursive-subtitle {
+  font-size: 0.92rem;
+  color: var(--ink-soft);
+  margin: 0;
+  line-height: 1.45;
+}
+
+.cursive-presets-section {
+  margin-bottom: 24px;
+  background: rgba(247, 247, 244, 0.7);
+  border: 1px solid rgba(201, 211, 224, 0.6);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.field-sublabel {
+  font-size: 0.84rem;
+  font-weight: 500;
+  color: var(--ink-soft);
+  margin: 12px 0 6px 0;
+}
+
+.cursive-chips-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.cursive-chip {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  background: #fff;
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  padding: 6px 12px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.cursive-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.cursive-chip.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+  font-weight: 500;
+  box-shadow: 0 2px 6px rgba(178, 58, 72, 0.25);
+}
+
+.ligatures-chips .cursive-chip {
+  font-family: var(--font-cursive);
+  font-size: 1.25rem;
+  padding: 4px 14px;
+  letter-spacing: 0.05em;
+}
+
+.cursive-chip.has-user-sample {
+  border-color: var(--success);
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.custom-cursive-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.custom-cursive-row input {
+  flex: 1;
+  padding: 9px 12px;
+  font-size: 0.92rem;
+  border: 1px solid var(--rule);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--ink);
+}
+
+.custom-cursive-row input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.cursive-target-label {
+  font-size: 0.95rem;
+  color: var(--ink-soft);
+  margin-bottom: 10px;
+}
+
+.cursive-target-label strong {
+  color: var(--ink);
+  font-size: 1.05rem;
+  font-family: var(--font-cursive);
+  letter-spacing: 0.02em;
+}
+
+.cursive-canvas-wrap {
+  width: 100%;
+  max-width: 680px;
+  height: 240px;
+  margin: 0 auto 16px auto;
+  border-radius: 12px;
+  box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.05), 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.cursive-canvas-wrap canvas {
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.cursive-user-samples-section {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px dashed var(--rule);
+}
+
+.hint-small {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+.user-ligature-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  border: 1px solid var(--success);
+  color: var(--success);
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+
+.user-ligature-tag .tag-text {
+  font-family: var(--font-cursive);
+  font-size: 1.15rem;
+}
+
+.user-ligature-tag .tag-delete {
+  cursor: pointer;
+  color: #94a3b8;
+  font-weight: bold;
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+.user-ligature-tag .tag-delete:hover {
+  color: var(--accent);
+}
+
+/* Быстрый тест слитности */
+.cursive-test-card {
+  margin-top: 20px;
+}
+
+.cursive-test-card h3 {
+  margin: 0 0 6px 0;
+  font-size: 1.15rem;
+  color: var(--ink);
+}
+
+.cursive-test-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.cursive-test-row input {
+  flex: 1;
+  padding: 10px 14px;
+  font-size: 0.95rem;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+}
+
+.cursive-test-preview-box {
+  margin-top: 16px;
+  padding: 14px;
+  background: #fbfbf9;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+}
+
+.preview-mode-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.preview-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+.preview-mode-switch .btn-admin-sm {
+  background: #fff;
+  border: 1px solid var(--rule);
+  color: var(--ink-soft);
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.preview-mode-switch .btn-admin-sm.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+  font-weight: 500;
+}
+
+.preview-img-wrap {
+  width: 100%;
+  overflow-x: auto;
+  text-align: center;
+  padding: 8px;
+  background: #fff;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.test-preview-img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+/* ==========================================================================
+   Стили настроек слитности в генераторе (Generate View)
+   ========================================================================== */
+
+.cursive-section {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(201, 211, 224, 0.5);
+}
+
+.cursive-toggle-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+@media (max-width: 600px) {
+  .cursive-toggle-group {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cursive-toggle-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border: 1.5px solid var(--rule);
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.cursive-toggle-btn:hover {
+  border-color: var(--accent-soft);
+  background: #fafaf9;
+}
+
+.cursive-toggle-btn.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.cursive-toggle-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 2px;
+}
+
+.cursive-toggle-desc {
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  line-height: 1.3;
+}
+
+.cursive-density-wrap {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.density-options {
+  display: flex;
+  gap: 6px;
+}
+
+.density-btn {
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  padding: 5px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.density-btn:hover {
+  border-color: var(--accent);
+}
+
+.density-btn.selected {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+  font-weight: 500;
+}
+

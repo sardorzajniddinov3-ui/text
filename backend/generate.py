@@ -24,12 +24,35 @@ def _sample_paths_for_current_user():
     return {s.char: s.file_path for s in current_user.samples}
 
 
-def _render_and_save(text, paper=DEFAULT_PAPER, font_size=DEFAULT_FONT_SIZE):
+import json
+
+def _render_and_save(
+    text,
+    paper=DEFAULT_PAPER,
+    font_size=DEFAULT_FONT_SIZE,
+    cursive=True,
+    cursive_density="standard",
+):
     samples = _sample_paths_for_current_user()
     if not samples:
         return None, "Сначала запишите свой почерк на странице «Обучение» — нужна хотя бы пара букв"
 
-    pages = render_text_to_pages(text, samples, paper=paper, font_size=font_size)
+    profile = None
+    if getattr(current_user, "cursive_profile", None):
+        try:
+            profile = json.loads(current_user.cursive_profile)
+        except Exception:
+            pass
+
+    pages = render_text_to_pages(
+        text,
+        samples,
+        paper=paper,
+        font_size=font_size,
+        cursive=cursive,
+        cursive_density=cursive_density,
+        cursive_profile=profile,
+    )
 
     folder = os.path.join(current_app.config["GENERATED_FOLDER"], str(current_user.id))
     os.makedirs(folder, exist_ok=True)
@@ -57,6 +80,49 @@ def get_papers():
     )
 
 
+@generate_bp.post("/preview")
+@login_required
+def generate_preview():
+    """Быстрый предпросмотр слитного почерка в виде base64 data-URL для вкладки связок."""
+    import base64
+    import io
+
+    data = request.get_json(force=True, silent=True) or {}
+    text = (data.get("text") or "Привет, как дела? Мой слитный почерк.").strip()
+    cursive = data.get("cursive", True)
+    cursive_density = data.get("cursive_density") or "standard"
+    font_size = data.get("font_size") or DEFAULT_FONT_SIZE
+
+    samples = _sample_paths_for_current_user()
+    if not samples:
+        return jsonify(error="Пока нет сохранённых образцов букв"), 400
+
+    profile = None
+    if getattr(current_user, "cursive_profile", None):
+        try:
+            profile = json.loads(current_user.cursive_profile)
+        except Exception:
+            pass
+
+    pages = render_text_to_pages(
+        text,
+        samples,
+        paper="blank",
+        font_size=font_size,
+        cursive=cursive,
+        cursive_density=cursive_density,
+        cursive_profile=profile,
+    )
+
+    buf = io.BytesIO()
+    # Берем первую страницу и кадрируем по высоте содержимого для компактного предпросмотра
+    first_page = pages[0]
+    first_page.save(buf, format="PNG")
+    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+
+    return jsonify(data_url=f"data:image/png;base64,{b64}")
+
+
 @generate_bp.post("/text")
 @login_required
 def generate_from_text():
@@ -64,13 +130,23 @@ def generate_from_text():
     text = (data.get("text") or "").strip()
     paper = data.get("paper") or DEFAULT_PAPER
     font_size = data.get("font_size") or DEFAULT_FONT_SIZE
+    cursive = data.get("cursive", True)
+    if isinstance(cursive, str):
+        cursive = cursive.lower() in ("true", "1", "yes")
+    cursive_density = data.get("cursive_density") or "standard"
 
     if not text:
         return jsonify(error="Введите текст для перевода в почерк"), 400
     if len(text) > MAX_TEXT_LENGTH:
         return jsonify(error=f"Слишком длинный текст (максимум {MAX_TEXT_LENGTH} символов)"), 400
 
-    result, error = _render_and_save(text, paper=paper, font_size=font_size)
+    result, error = _render_and_save(
+        text,
+        paper=paper,
+        font_size=font_size,
+        cursive=cursive,
+        cursive_density=cursive_density,
+    )
     if error:
         return jsonify(error=error), 400
     return jsonify(result)
@@ -89,6 +165,9 @@ def generate_from_photo():
 
     paper = request.form.get("paper") or DEFAULT_PAPER
     font_size = request.form.get("font_size") or DEFAULT_FONT_SIZE
+    cursive_val = request.form.get("cursive", "true")
+    cursive = cursive_val.lower() in ("true", "1", "yes")
+    cursive_density = request.form.get("cursive_density") or "standard"
 
     try:
         text = recognize_text_from_image(image_bytes)
@@ -98,7 +177,13 @@ def generate_from_photo():
     if not text:
         return jsonify(error="Не удалось распознать текст на фото. Попробуйте более чёткое изображение."), 422
 
-    result, error = _render_and_save(text, paper=paper, font_size=font_size)
+    result, error = _render_and_save(
+        text,
+        paper=paper,
+        font_size=font_size,
+        cursive=cursive,
+        cursive_density=cursive_density,
+    )
     if error:
         return jsonify(error=error), 400
 

@@ -39,20 +39,35 @@ const api = {
   me: () => apiRequest("/api/auth/me"),
   login: (username, password) => apiRequest("/api/auth/login", { method: "POST", body: { username, password } }),
   register: (username, password) => apiRequest("/api/auth/register", { method: "POST", body: { username, password } }),
+  resetPassword: (username, password) =>
+    apiRequest("/api/auth/reset-password", { method: "POST", body: { username, password } }),
   logout: () => apiRequest("/api/auth/logout", { method: "POST" }),
 
   getAlphabet: () => apiRequest("/api/samples/alphabet"),
   getProgress: () => apiRequest("/api/samples/progress"),
-  saveSample: (char, image) => apiRequest("/api/samples", { method: "POST", body: { char, image } }),
+  saveSample: (char, image, isCursive = false) =>
+    apiRequest("/api/samples", { method: "POST", body: { char, image, is_cursive: isCursive } }),
+  deleteSample: (char) => apiRequest(`/api/samples/${encodeURIComponent(char)}`, { method: "DELETE" }),
+
+  getCursivePresets: () => apiRequest("/api/samples/cursive-presets"),
+  getCursiveProfile: () => apiRequest("/api/samples/cursive-profile"),
+  updateCursiveProfile: (profile) => apiRequest("/api/samples/cursive-profile", { method: "POST", body: profile }),
+  generatePreview: (text, cursive = true, cursiveDensity = "standard") =>
+    apiRequest("/api/generate/preview", { method: "POST", body: { text, cursive, cursive_density: cursiveDensity } }),
 
   getPapers: () => apiRequest("/api/generate/papers"),
-  generateFromText: (text, paper, fontSize) =>
-    apiRequest("/api/generate/text", { method: "POST", body: { text, paper, font_size: fontSize } }),
-  generateFromPhoto: (file, paper, fontSize) => {
+  generateFromText: (text, paper, fontSize, cursive = true, cursiveDensity = "standard") =>
+    apiRequest("/api/generate/text", {
+      method: "POST",
+      body: { text, paper, font_size: fontSize, cursive, cursive_density: cursiveDensity },
+    }),
+  generateFromPhoto: (file, paper, fontSize, cursive = true, cursiveDensity = "standard") => {
     const form = new FormData();
     form.append("photo", file);
     form.append("paper", paper);
     if (fontSize) form.append("font_size", fontSize);
+    form.append("cursive", cursive ? "true" : "false");
+    form.append("cursive_density", cursiveDensity);
     return apiRequest("/api/generate/photo", { method: "POST", body: form, isFormData: true });
   },
 };

@@ -149,12 +149,22 @@ def list_font_sizes():
     return [{"key": k, "label": v["label"]} for k, v in FONT_PRESETS.items()]
 
 
-def _load_glyph(path, scale=0.21):
-    """Загружает сохранённый образец буквы, обрезает поля по бокам и масштабирует.
+class GlyphData:
+    def __init__(self, image, exit_x, exit_y, entry_x, entry_y, ink_color, stroke_width):
+        self.image = image
+        self.size = image.size
+        self.width = image.width
+        self.height = image.height
+        self.exit_x = exit_x
+        self.exit_y = exit_y
+        self.entry_x = entry_x
+        self.entry_y = entry_y
+        self.ink_color = ink_color
+        self.stroke_width = stroke_width
 
-    Обрезает только по горизонтали, сохраняя полную высоту холста (260px).
-    Это обеспечивает правильную посадку букв на строку без искажения высоты.
-    """
+
+def _load_glyph(path, scale=0.21):
+    """Загружает сохранённый образец буквы или связки, вычисляет точки выхода и входа."""
     img = Image.open(path).convert("RGBA")
     bbox = img.getbbox()
     if not bbox:
@@ -165,36 +175,152 @@ def _load_glyph(path, scale=0.21):
         return None
     new_w = max(1, round(w * scale))
     new_h = max(1, round(h * scale))
-    return cropped.resize((new_w, new_h), Image.LANCZOS)
+    scaled = cropped.resize((new_w, new_h), Image.LANCZOS)
+
+    sw, sh = scaled.size
+    r_pts = []
+    for x in range(sw - 1, max(-1, sw - 6), -1):
+        for y in range(sh):
+            pix = scaled.getpixel((x, y))
+            if pix[3] > 40:
+                r_pts.append((x, y, pix[3]))
+        if r_pts:
+            break
+
+    l_pts = []
+    for x in range(0, min(sw, 6)):
+        for y in range(sh):
+            pix = scaled.getpixel((x, y))
+            if pix[3] > 40:
+                l_pts.append((x, y, pix[3]))
+        if l_pts:
+            break
+
+    baseline_scaled = round(CANVAS_BASELINE * scale)
+    exit_y = sum(p[1] * p[2] for p in r_pts) / sum(p[2] for p in r_pts) if r_pts else baseline_scaled
+    entry_y = sum(p[1] * p[2] for p in l_pts) / sum(p[2] for p in l_pts) if l_pts else baseline_scaled
+    exit_x = r_pts[0][0] if r_pts else sw - 1
+    entry_x = l_pts[0][0] if l_pts else 0
+
+    ink_colors = [scaled.getpixel((x, y))[:3] for x in range(sw) for y in range(sh) if scaled.getpixel((x, y))[3] > 180]
+    avg_color = (
+        round(sum(c[0] for c in ink_colors) / len(ink_colors)) if ink_colors else 34,
+        round(sum(c[1] for c in ink_colors) / len(ink_colors)) if ink_colors else 40,
+        round(sum(c[2] for c in ink_colors) / len(ink_colors)) if ink_colors else 59,
+    )
+    stroke_w = max(1.5, round(scale * 10))
+
+    return GlyphData(
+        image=scaled,
+        exit_x=exit_x,
+        exit_y=exit_y,
+        entry_x=entry_x,
+        entry_y=entry_y,
+        ink_color=avg_color,
+        stroke_width=stroke_w,
+    )
 
 
-def render_text_to_pages(text, sample_paths, paper=DEFAULT_PAPER, font_size=DEFAULT_FONT_SIZE):
-    """Компонует текст из образцов букв пользователя с чётким, легко читаемым видом.
+def _draw_cursive_connector(draw, p0, p1, color, width=2):
+    """Рисует плавную каллиграфическую соединительную кривую Безье между двумя буквами."""
+    import math
 
-    sample_paths: dict, символ -> путь к PNG файлу с образцом.
+    dx = p1[0] - p0[0]
+    dy = p1[1] - p0[1]
+
+    if dx < 1:
+        return
+
+    # Натуральная форма соединительного штриха: плавный вынос хвоста и подъем к началу буквы
+    cx1 = p0[0] + dx * 0.45
+    cy1 = p0[1] + (1.5 if dy >= 0 else -1.0)
+    cx2 = p0[0] + dx * 0.8
+    cy2 = p1[1] + (1.0 if dy < 0 else -1.0)
+
+    steps = max(6, int(math.hypot(dx, dy) * 1.5))
+    pts = []
+    for i in range(steps + 1):
+        t = i / steps
+        bx = (1 - t) ** 3 * p0[0] + 3 * (1 - t) ** 2 * t * cx1 + 3 * (1 - t) * t ** 2 * cx2 + t ** 3 * p1[0]
+        by = (1 - t) ** 3 * p0[1] + 3 * (1 - t) ** 2 * t * cy1 + 3 * (1 - t) * t ** 2 * cy2 + t ** 3 * p1[1]
+        pts.append((bx, by))
+
+    r, g, b = color[:3]
+    rgba = (r, g, b, 235)
+    line_w = int(round(width))
+    for i in range(len(pts) - 1):
+        draw.line([pts[i], pts[i + 1]], fill=rgba, width=line_w)
+        half = line_w / 2.0
+        draw.ellipse([pts[i][0] - half, pts[i][1] - half, pts[i][0] + half, pts[i][1] + half], fill=rgba)
+
+
+def _tokenize_word(word, sample_paths):
+    """Разбивает слово на фрагменты, находя самые длинные сохраненные связки и буквы."""
+    tokens = []
+    i = 0
+    n = len(word)
+    while i < n:
+        matched = None
+        for length in range(min(12, n - i), 0, -1):
+            sub = word[i : i + length]
+            if sub in sample_paths or sub.lower() in sample_paths or sub.upper() in sample_paths:
+                matched = sub
+                break
+        if matched:
+            tokens.append(matched)
+            i += len(matched)
+        else:
+            tokens.append(word[i])
+            i += 1
+    return tokens
+
+
+def render_text_to_pages(
+    text,
+    sample_paths,
+    paper=DEFAULT_PAPER,
+    font_size=DEFAULT_FONT_SIZE,
+    cursive=True,
+    cursive_density="standard",
+    cursive_profile=None,
+):
+    """Компонует текст из образцов букв пользователя со слитными связками или раздельно.
+
+    sample_paths: dict, символ/связка -> путь к PNG файлу с образцом.
     paper: ключ варианта бумаги (см. PAPER_STYLES).
     font_size: 'compact', 'standard', 'large' или числовой масштаб (scale).
-    Возвращает список PIL.Image (по одному на страницу А4), готовых к сохранению.
+    cursive: True — слитное рукописное письмо со связками букв, False — раздельные буквы.
+    cursive_density: 'tight' (плотные связки), 'standard' (естественные), 'loose' (свободные).
     """
     params = get_font_params(font_size)
     scale = params["scale"]
     line_height = params["line_height"]
     line_ascent = params["line_ascent"]
     space_width = params["space_width"]
-    letter_spacing = params["letter_spacing"]
     margin_x = params["margin_x"]
     margin_top = params["margin_top"]
     margin_bottom = params["margin_bottom"]
 
+    # Настройка межбуквенного интервала для слитного или раздельного письма
+    if cursive:
+        if cursive_density == "tight":
+            letter_gap = max(2, round(scale * 16))
+        elif cursive_density == "loose":
+            letter_gap = max(4, round(scale * 30))
+        else:  # standard
+            letter_gap = max(3, round(scale * 23))
+    else:
+        letter_gap = params["letter_spacing"]
+
     glyph_baseline_offset = round(CANVAS_BASELINE * scale)
     glyph_cache = {}
 
-    def get_glyph(ch):
-        if ch in glyph_cache:
-            return glyph_cache[ch]
-        path = sample_paths.get(ch) or sample_paths.get(ch.lower()) or sample_paths.get(ch.upper())
+    def get_glyph(token):
+        if token in glyph_cache:
+            return glyph_cache[token]
+        path = sample_paths.get(token) or sample_paths.get(token.lower()) or sample_paths.get(token.upper())
         res = _load_glyph(path, scale=scale) if path and os.path.exists(path) else None
-        glyph_cache[ch] = res
+        glyph_cache[token] = res
         return res
 
     def new_blank_page():
@@ -209,27 +335,36 @@ def render_text_to_pages(text, sample_paths, paper=DEFAULT_PAPER, font_size=DEFA
 
     pages = []
     page = new_blank_page()
+    page_draw = ImageDraw.Draw(page)
     x, y = margin_x, margin_top
 
     def new_page():
-        nonlocal page, x, y
+        nonlocal page, page_draw, x, y
         pages.append(page)
         page = new_blank_page()
+        page_draw = ImageDraw.Draw(page)
         x, y = margin_x, margin_top
 
     paragraphs = text.replace("\r\n", "\n").split("\n")
     for p_index, paragraph in enumerate(paragraphs):
         words = paragraph.split(" ")
         for w_index, word in enumerate(words):
-            # Посчитать ширину слова с учётом чистого межбуквенного интервала
-            word_width = 0
-            for idx, ch in enumerate(word):
-                g = get_glyph(ch)
-                if g:
-                    word_width += g.size[0] + (letter_spacing if idx < len(word) - 1 else 0)
-                else:
-                    word_width += space_width
+            if not word:
+                x += space_width
+                continue
 
+            tokens = _tokenize_word(word, sample_paths)
+
+            # Вычисляем общую ширину слова
+            word_width = 0
+            for idx, tok in enumerate(tokens):
+                g = get_glyph(tok)
+                if g:
+                    word_width += g.width + (letter_gap if idx < len(tokens) - 1 else 0)
+                else:
+                    word_width += space_width // 2
+
+            # Перенос слова на новую строку, если не помещается
             if x + word_width > PAGE_WIDTH - margin_x and x > margin_x:
                 x = margin_x
                 y += line_height
@@ -237,34 +372,70 @@ def render_text_to_pages(text, sample_paths, paper=DEFAULT_PAPER, font_size=DEFA
             if y + line_height > PAGE_HEIGHT - margin_bottom:
                 new_page()
 
-            for ch_idx, ch in enumerate(word):
-                glyph = get_glyph(ch)
+            # Размещаем токены слова
+            word_positions = []
+            cur_x = x
+            baseline_y = y + line_ascent
+
+            for tok in tokens:
+                glyph = get_glyph(tok)
                 if glyph is None:
-                    x += space_width
+                    cur_x += space_width // 2
                     continue
 
-                gw = glyph.size[0]
-                if x + gw > PAGE_WIDTH - margin_x:
-                    x = margin_x
+                gw = glyph.width
+                if cur_x + gw > PAGE_WIDTH - margin_x and cur_x > margin_x:
+                    cur_x = margin_x
                     y += line_height
+                    baseline_y = y + line_ascent
                     if y + line_height > PAGE_HEIGHT - margin_bottom:
                         new_page()
+                        baseline_y = y + line_ascent
 
-                # Мягкий естественный наклон без резких перекосов
-                angle = random.uniform(-1.0, 1.0)
-                glyph_r = glyph.rotate(angle, expand=True, resample=Image.BICUBIC)
+                angle = random.uniform(-0.8, 0.8)
+                glyph_r = glyph.image.rotate(angle, expand=True, resample=Image.BICUBIC)
 
-                baseline_y = y + line_ascent
-                offset_x = x
+                offset_x = cur_x
                 offset_y = baseline_y - glyph_baseline_offset + random.choice([-1, 0, 1])
 
-                page.alpha_composite(glyph_r, (offset_x, offset_y))
-                x += gw + letter_spacing
+                word_positions.append(
+                    {
+                        "token": tok,
+                        "glyph": glyph,
+                        "rotated": glyph_r,
+                        "x": offset_x,
+                        "y": offset_y,
+                        "width": gw,
+                    }
+                )
+                cur_x += gw + letter_gap
 
+            # Если включен слитный режим, рисуем соединительные связки между соседними буквами слова
+            if cursive and len(word_positions) > 1:
+                for i in range(len(word_positions) - 1):
+                    item1 = word_positions[i]
+                    item2 = word_positions[i + 1]
+                    tok1 = item1["token"]
+                    tok2 = item2["token"]
+
+                    # Связываем только буквы (не знаки препинания и не цифры)
+                    if any(c.isalpha() for c in tok1) and any(c.isalpha() for c in tok2):
+                        g1 = item1["glyph"]
+                        g2 = item2["glyph"]
+                        p0 = (item1["x"] + g1.exit_x, item1["y"] + g1.exit_y)
+                        p1 = (item2["x"] + g2.entry_x, item2["y"] + g2.entry_y)
+                        conn_width = g1.stroke_width
+                        _draw_cursive_connector(page_draw, p0, p1, g1.ink_color, width=conn_width)
+
+            # Накладываем сами символы
+            for item in word_positions:
+                page.alpha_composite(item["rotated"], (item["x"], item["y"]))
+
+            x = cur_x
             if w_index != len(words) - 1:
                 x += space_width
 
-        # новый абзац -> новая строка
+        # Переход на новую строку после абзаца
         if p_index != len(paragraphs) - 1:
             x = margin_x
             y += line_height
@@ -272,9 +443,8 @@ def render_text_to_pages(text, sample_paths, paper=DEFAULT_PAPER, font_size=DEFA
                 new_page()
 
     pages.append(page)
-
-    # Убираем альфа-канал
     return [pg.convert("RGB") for pg in pages]
+
 
 
 def save_png(pages, png_path):

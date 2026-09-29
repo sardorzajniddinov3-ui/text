@@ -10,8 +10,11 @@
 
   const loginForm = document.getElementById("login-form");
   const registerForm = document.getElementById("register-form");
+  const resetForm = document.getElementById("reset-form");
   const loginError = document.getElementById("login-error");
   const registerError = document.getElementById("register-error");
+  const resetError = document.getElementById("reset-error");
+  const forgotPasswordLink = document.getElementById("forgot-password-link");
 
   const trainView = document.getElementById("train-view");
   const generateView = document.getElementById("generate-view");
@@ -49,6 +52,15 @@
   let selectedFontSize = "standard";
   let papersLoaded = false;
 
+  // Cursive state
+  let selectedCursive = true;
+  let selectedDensity = "standard";
+  let currentCursiveText = "Съешь ещё этих мягких французских булок";
+  let cursivePresetsData = null;
+  let userLigatures = [];
+  let isCursivePreview = true;
+  let cursiveStrokes = []; // для отмены (undo)
+
   // ===================================================================
   // Переключение вкладок (универсально для любых .tabs с data-атрибутами)
   // ===================================================================
@@ -66,7 +78,16 @@
   setupTabs(document.querySelector("#auth-view .tabs"), "tab", (tab) => {
     loginForm.classList.toggle("hidden", tab !== "login");
     registerForm.classList.toggle("hidden", tab !== "register");
+    if (resetForm) resetForm.classList.toggle("hidden", tab !== "reset");
   });
+
+  if (forgotPasswordLink) {
+    forgotPasswordLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      const resetTabBtn = document.querySelector('#auth-view .tabs .tab-btn[data-tab="reset"]');
+      if (resetTabBtn) resetTabBtn.click();
+    });
+  }
 
   setupTabs(document.querySelector(".main-tabs"), "view", (view) => {
     trainView.classList.toggle("hidden", view !== "train");
@@ -89,6 +110,7 @@
     const adminBtn = document.getElementById('admin-btn');
     if (adminBtn) adminBtn.classList.toggle('hidden', !user.is_admin);
     await initTraining();
+    await initCursiveTraining();
     await initPapers();
   }
 
@@ -134,6 +156,20 @@
       registerError.textContent = err.message;
     }
   });
+
+  if (resetForm) {
+    resetForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (resetError) resetError.textContent = "";
+      const fd = new FormData(resetForm);
+      try {
+        const user = await api.resetPassword(fd.get("username").trim(), fd.get("password"));
+        await showApp(user);
+      } catch (err) {
+        if (resetError) resetError.textContent = err.message;
+      }
+    });
+  }
 
   logoutBtn.addEventListener("click", async () => {
     try { await api.logout(); } catch (e) { /* игнорируем */ }
@@ -486,6 +522,39 @@
     resultCard.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
+  // ===================================================================
+  // Настройки слитности в генераторе (Generate View)
+  // ===================================================================
+  const cursiveToggleOn = document.getElementById("cursive-toggle-on");
+  const cursiveToggleOff = document.getElementById("cursive-toggle-off");
+  const cursiveDensityWrap = document.getElementById("cursive-density-wrap");
+  const densityOptions = document.getElementById("density-options");
+
+  if (cursiveToggleOn && cursiveToggleOff) {
+    cursiveToggleOn.addEventListener("click", () => {
+      selectedCursive = true;
+      cursiveToggleOn.classList.add("selected");
+      cursiveToggleOff.classList.remove("selected");
+      if (cursiveDensityWrap) cursiveDensityWrap.classList.remove("hidden");
+    });
+    cursiveToggleOff.addEventListener("click", () => {
+      selectedCursive = false;
+      cursiveToggleOff.classList.add("selected");
+      cursiveToggleOn.classList.remove("selected");
+      if (cursiveDensityWrap) cursiveDensityWrap.classList.add("hidden");
+    });
+  }
+
+  if (densityOptions) {
+    densityOptions.querySelectorAll(".density-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        densityOptions.querySelectorAll(".density-btn").forEach((b) => b.classList.remove("selected"));
+        btn.classList.add("selected");
+        selectedDensity = btn.dataset.density;
+      });
+    });
+  }
+
   generateTextBtn.addEventListener("click", async () => {
     const text = textInput.value.trim();
     generateMsg.textContent = "";
@@ -496,7 +565,13 @@
     generateTextBtn.disabled = true;
     generateMsg.textContent = "Пишем вашим почерком...";
     try {
-      const result = await api.generateFromText(text, selectedPaper, selectedFontSize);
+      const result = await api.generateFromText(
+        text,
+        selectedPaper,
+        selectedFontSize,
+        selectedCursive,
+        selectedDensity
+      );
       generateMsg.textContent = "";
       showResult(result);
     } catch (err) {
@@ -516,7 +591,13 @@
     recognizeBtn.disabled = true;
     generateMsg.textContent = "Распознаём текст и пишем вашим почерком...";
     try {
-      const result = await api.generateFromPhoto(file, selectedPaper, selectedFontSize);
+      const result = await api.generateFromPhoto(
+        file,
+        selectedPaper,
+        selectedFontSize,
+        selectedCursive,
+        selectedDensity
+      );
       recognizedText.value = result.recognized_text || "";
       recognizedBox.classList.remove("hidden");
       generateMsg.textContent = "";
@@ -538,7 +619,13 @@
     generateRecognizedBtn.disabled = true;
     generateMsg.textContent = "Пишем вашим почерком...";
     try {
-      const result = await api.generateFromText(text, selectedPaper, selectedFontSize);
+      const result = await api.generateFromText(
+        text,
+        selectedPaper,
+        selectedFontSize,
+        selectedCursive,
+        selectedDensity
+      );
       generateMsg.textContent = "";
       showResult(result);
     } catch (err) {
@@ -547,6 +634,459 @@
       generateRecognizedBtn.disabled = false;
     }
   });
+
+  // ===================================================================
+  // Обучение слитности и связкам букв (Cursive Training)
+  // ===================================================================
+  const trainSubtabs = document.getElementById("train-subtabs");
+  const trainLettersPanel = document.getElementById("train-letters-panel");
+  const trainCursivePanel = document.getElementById("train-cursive-panel");
+
+  const cursiveGuideCanvas = document.getElementById("cursive-guide-canvas");
+  const cursiveDrawCanvas = document.getElementById("cursive-draw-canvas");
+  const cursiveClearBtn = document.getElementById("cursive-clear-btn");
+  const cursiveUndoBtn = document.getElementById("cursive-undo-btn");
+  const cursiveSaveBtn = document.getElementById("cursive-save-btn");
+  const cursiveTrainMsg = document.getElementById("cursive-train-msg");
+  const currentCursiveTextEl = document.getElementById("current-cursive-text");
+  const customCursiveInput = document.getElementById("custom-cursive-input");
+  const customCursiveBtn = document.getElementById("custom-cursive-btn");
+  const cursivePhrasesList = document.getElementById("cursive-phrases-list");
+  const cursiveLigaturesList = document.getElementById("cursive-ligatures-list");
+  const userLigaturesList = document.getElementById("user-ligatures-list");
+  const cursiveTestInput = document.getElementById("cursive-test-input");
+  const cursiveTestBtn = document.getElementById("cursive-test-btn");
+  const cursiveTestPreviewBox = document.getElementById("cursive-test-preview-box");
+  const cursiveTestImg = document.getElementById("cursive-test-img");
+  const testPreviewCursive = document.getElementById("test-preview-cursive");
+  const testPreviewSeparate = document.getElementById("test-preview-separate");
+
+  let cursiveGuideCtx = null;
+  let cursiveDrawCtx = null;
+  let cursiveDrawing = false;
+  let cursiveCurrentPoints = [];
+  let cursiveHasStrokes = false;
+
+  function initCursiveCanvas() {
+    if (!cursiveDrawCanvas || !cursiveGuideCanvas) return;
+    cursiveGuideCtx = cursiveGuideCanvas.getContext("2d");
+    cursiveDrawCtx = cursiveDrawCanvas.getContext("2d");
+
+    cursiveDrawCtx.lineWidth = 6;
+    cursiveDrawCtx.lineCap = "round";
+    cursiveDrawCtx.lineJoin = "round";
+    cursiveDrawCtx.strokeStyle = "#22283b";
+
+    function getCursivePoint(evt) {
+      const rect = cursiveDrawCanvas.getBoundingClientRect();
+      const scaleX = cursiveDrawCanvas.width / rect.width;
+      const scaleY = cursiveDrawCanvas.height / rect.height;
+      return {
+        x: (evt.clientX - rect.left) * scaleX,
+        y: (evt.clientY - rect.top) * scaleY,
+      };
+    }
+
+    cursiveDrawCanvas.addEventListener("pointerdown", (evt) => {
+      cursiveDrawing = true;
+      cursiveHasStrokes = true;
+      const p = getCursivePoint(evt);
+      cursiveCurrentPoints = [p];
+
+      cursiveDrawCtx.beginPath();
+      cursiveDrawCtx.arc(p.x, p.y, cursiveDrawCtx.lineWidth / 2, 0, Math.PI * 2);
+      cursiveDrawCtx.fillStyle = cursiveDrawCtx.strokeStyle;
+      cursiveDrawCtx.fill();
+
+      cursiveDrawCanvas.setPointerCapture(evt.pointerId);
+    });
+
+    cursiveDrawCanvas.addEventListener("pointermove", (evt) => {
+      if (!cursiveDrawing) return;
+      const p = getCursivePoint(evt);
+      cursiveCurrentPoints.push(p);
+
+      if (cursiveCurrentPoints.length >= 3) {
+        const p0 = cursiveCurrentPoints[cursiveCurrentPoints.length - 3];
+        const p1 = cursiveCurrentPoints[cursiveCurrentPoints.length - 2];
+        const p2 = cursiveCurrentPoints[cursiveCurrentPoints.length - 1];
+
+        const mid1 = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
+        const mid2 = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+
+        cursiveDrawCtx.beginPath();
+        cursiveDrawCtx.moveTo(mid1.x, mid1.y);
+        cursiveDrawCtx.quadraticCurveTo(p1.x, p1.y, mid2.x, mid2.y);
+        cursiveDrawCtx.stroke();
+      } else if (cursiveCurrentPoints.length === 2) {
+        cursiveDrawCtx.beginPath();
+        cursiveDrawCtx.moveTo(cursiveCurrentPoints[0].x, cursiveCurrentPoints[0].y);
+        cursiveDrawCtx.lineTo(cursiveCurrentPoints[1].x, cursiveCurrentPoints[1].y);
+        cursiveDrawCtx.stroke();
+      }
+    });
+
+    function stopCursiveDrawing() {
+      if (cursiveDrawing && cursiveCurrentPoints.length > 0) {
+        if (cursiveCurrentPoints.length > 2) {
+          const p1 = cursiveCurrentPoints[cursiveCurrentPoints.length - 2];
+          const p2 = cursiveCurrentPoints[cursiveCurrentPoints.length - 1];
+          const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+          cursiveDrawCtx.beginPath();
+          cursiveDrawCtx.moveTo(mid.x, mid.y);
+          cursiveDrawCtx.lineTo(p2.x, p2.y);
+          cursiveDrawCtx.stroke();
+        }
+        // Сохраняем штрих в историю для отмены (undo)
+        cursiveStrokes.push([...cursiveCurrentPoints]);
+      }
+      cursiveDrawing = false;
+      cursiveCurrentPoints = [];
+    }
+
+    cursiveDrawCanvas.addEventListener("pointerup", stopCursiveDrawing);
+    cursiveDrawCanvas.addEventListener("pointercancel", stopCursiveDrawing);
+    cursiveDrawCanvas.addEventListener("pointerleave", stopCursiveDrawing);
+  }
+
+  function redrawCursiveStrokes() {
+    if (!cursiveDrawCtx || !cursiveDrawCanvas) return;
+    cursiveDrawCtx.clearRect(0, 0, cursiveDrawCanvas.width, cursiveDrawCanvas.height);
+    cursiveHasStrokes = cursiveStrokes.length > 0;
+
+    cursiveStrokes.forEach((stroke) => {
+      if (stroke.length === 0) return;
+      if (stroke.length === 1) {
+        cursiveDrawCtx.beginPath();
+        cursiveDrawCtx.arc(stroke[0].x, stroke[0].y, cursiveDrawCtx.lineWidth / 2, 0, Math.PI * 2);
+        cursiveDrawCtx.fillStyle = cursiveDrawCtx.strokeStyle;
+        cursiveDrawCtx.fill();
+        return;
+      }
+      cursiveDrawCtx.beginPath();
+      cursiveDrawCtx.moveTo(stroke[0].x, stroke[0].y);
+      for (let i = 1; i < stroke.length - 1; i++) {
+        const midX = (stroke[i].x + stroke[i + 1].x) / 2;
+        const midY = (stroke[i].y + stroke[i + 1].y) / 2;
+        cursiveDrawCtx.quadraticCurveTo(stroke[i].x, stroke[i].y, midX, midY);
+      }
+      cursiveDrawCtx.lineTo(stroke[stroke.length - 1].x, stroke[stroke.length - 1].y);
+      cursiveDrawCtx.stroke();
+    });
+  }
+
+  function clearCursiveCanvas() {
+    if (!cursiveDrawCtx || !cursiveDrawCanvas) return;
+    cursiveDrawCtx.clearRect(0, 0, cursiveDrawCanvas.width, cursiveDrawCanvas.height);
+    cursiveStrokes = [];
+    cursiveHasStrokes = false;
+    cursiveCurrentPoints = [];
+  }
+
+  function drawCursiveGuide(text) {
+    if (!cursiveGuideCtx || !cursiveGuideCanvas) return;
+    const W = cursiveGuideCanvas.width;
+    const H = cursiveGuideCanvas.height;
+    cursiveGuideCtx.clearRect(0, 0, W, H);
+
+    // Линовка как в каллиграфических прописях
+    const yTop = Math.round(H * 0.22); // верх заглавных
+    const yMid = Math.round(H * 0.46); // верх строчных (x-height)
+    const yBase = Math.round(H * 0.70); // красная базовая линия
+    const yBottom = Math.round(H * 0.90); // нижняя линия выносных
+
+    const pad = 12;
+    cursiveGuideCtx.save();
+
+    // Наклонные линии письма (75 градусов, шаг 50px)
+    cursiveGuideCtx.strokeStyle = "rgba(100, 149, 237, 0.16)";
+    cursiveGuideCtx.lineWidth = 1;
+    cursiveGuideCtx.setLineDash([3, 4]);
+    const slantDx = Math.round((H * 0.8) / Math.tan((75 * Math.PI) / 180));
+    for (let x = -slantDx; x < W + slantDx; x += 52) {
+      cursiveGuideCtx.beginPath();
+      cursiveGuideCtx.moveTo(x + slantDx, yTop - 10);
+      cursiveGuideCtx.lineTo(x, yBottom + 10);
+      cursiveGuideCtx.stroke();
+    }
+
+    // Верхняя заглавная линия (пунктир)
+    cursiveGuideCtx.strokeStyle = "rgba(100, 149, 237, 0.40)";
+    cursiveGuideCtx.setLineDash([5, 5]);
+    cursiveGuideCtx.beginPath();
+    cursiveGuideCtx.moveTo(pad, yTop);
+    cursiveGuideCtx.lineTo(W - pad, yTop);
+    cursiveGuideCtx.stroke();
+
+    // Средняя линия строчных (сплошная)
+    cursiveGuideCtx.strokeStyle = "rgba(100, 149, 237, 0.50)";
+    cursiveGuideCtx.setLineDash([]);
+    cursiveGuideCtx.beginPath();
+    cursiveGuideCtx.moveTo(pad, yMid);
+    cursiveGuideCtx.lineTo(W - pad, yMid);
+    cursiveGuideCtx.stroke();
+
+    // Красная базовая линия (главная)
+    cursiveGuideCtx.strokeStyle = "rgba(220, 53, 69, 0.75)";
+    cursiveGuideCtx.lineWidth = 2;
+    cursiveGuideCtx.beginPath();
+    cursiveGuideCtx.moveTo(pad, yBase);
+    cursiveGuideCtx.lineTo(W - pad, yBase);
+    cursiveGuideCtx.stroke();
+
+    // Нижняя линия выносных (пунктир)
+    cursiveGuideCtx.strokeStyle = "rgba(100, 149, 237, 0.35)";
+    cursiveGuideCtx.lineWidth = 1;
+    cursiveGuideCtx.setLineDash([3, 5]);
+    cursiveGuideCtx.beginPath();
+    cursiveGuideCtx.moveTo(pad, yBottom);
+    cursiveGuideCtx.lineTo(W - pad, yBottom);
+    cursiveGuideCtx.stroke();
+
+    cursiveGuideCtx.restore();
+
+    // Прописная подсказка текста (Marck Script)
+    if (text) {
+      cursiveGuideCtx.save();
+      cursiveGuideCtx.fillStyle = "rgba(34, 40, 59, 0.16)";
+      let fontSize = Math.round(H * 0.36);
+      if (text.length <= 4) fontSize = Math.round(H * 0.48);
+      else if (text.length > 25) fontSize = Math.round(H * 0.24);
+      else if (text.length > 15) fontSize = Math.round(H * 0.30);
+
+      cursiveGuideCtx.font = `${fontSize}px 'Marck Script', 'Caveat', cursive`;
+      cursiveGuideCtx.textAlign = "left";
+      cursiveGuideCtx.textBaseline = "alphabetic";
+
+      // Если текст не помещается, мягко ужимаем шрифт
+      const metrics = cursiveGuideCtx.measureText(text);
+      if (metrics.width > W - 50) {
+        fontSize = Math.floor(fontSize * ((W - 50) / metrics.width));
+        cursiveGuideCtx.font = `${fontSize}px 'Marck Script', 'Caveat', cursive`;
+      }
+
+      cursiveGuideCtx.fillText(text, 24, yBase);
+      cursiveGuideCtx.restore();
+    }
+  }
+
+  function setCursiveTarget(text) {
+    currentCursiveText = text.trim();
+    if (currentCursiveTextEl) {
+      currentCursiveTextEl.textContent = currentCursiveText;
+    }
+    drawCursiveGuide(currentCursiveText);
+    clearCursiveCanvas();
+    if (cursiveTrainMsg) cursiveTrainMsg.textContent = "";
+
+    // Подсветка активного чипа
+    document.querySelectorAll(".cursive-chip").forEach((chip) => {
+      chip.classList.toggle("active", chip.dataset.text === currentCursiveText);
+    });
+  }
+
+  async function loadCursivePresets() {
+    try {
+      const data = await api.getCursivePresets();
+      cursivePresetsData = data;
+      userLigatures = data.user_ligatures || [];
+
+      // 1. Рендерим фразы
+      if (cursivePhrasesList) {
+        cursivePhrasesList.innerHTML = "";
+        data.phrases.forEach((p, idx) => {
+          const chip = document.createElement("button");
+          chip.type = "button";
+          chip.className = "cursive-chip" + (idx === 0 && !currentCursiveText ? " active" : "");
+          chip.dataset.text = p.text;
+          chip.textContent = p.title + ": «" + p.text.slice(0, 32) + "...»";
+          chip.title = p.text;
+          chip.addEventListener("click", () => setCursiveTarget(p.text));
+          cursivePhrasesList.appendChild(chip);
+        });
+      }
+
+      // 2. Рендерим популярные связки (лигатуры)
+      if (cursiveLigaturesList) {
+        cursiveLigaturesList.innerHTML = "";
+        data.common_ligatures.forEach((lig) => {
+          const chip = document.createElement("button");
+          chip.type = "button";
+          const hasUser = userLigatures.includes(lig);
+          chip.className = "cursive-chip" + (hasUser ? " has-user-sample" : "");
+          chip.dataset.text = lig;
+          chip.textContent = lig;
+          chip.title = hasUser ? "Связка уже записана! Нажмите для перезаписи" : "Нажмите, чтобы потренировать связку";
+          chip.addEventListener("click", () => setCursiveTarget(lig));
+          cursiveLigaturesList.appendChild(chip);
+        });
+      }
+
+      // 3. Рендерим пользовательские сохраненные связки
+      renderUserLigaturesList();
+    } catch (e) {
+      console.warn("Failed to load cursive presets:", e);
+    }
+  }
+
+  function renderUserLigaturesList() {
+    if (!userLigaturesList) return;
+    userLigaturesList.innerHTML = "";
+    if (!userLigatures || userLigatures.length === 0) {
+      userLigaturesList.innerHTML =
+        '<span class="hint-small">Пока нет дополнительных связок. Выберите связку выше или напишите своё слово.</span>';
+      return;
+    }
+
+    userLigatures.forEach((lig) => {
+      const tag = document.createElement("div");
+      tag.className = "user-ligature-tag";
+
+      const txt = document.createElement("span");
+      txt.className = "tag-text";
+      txt.textContent = lig;
+      txt.style.cursor = "pointer";
+      txt.title = "Нажмите, чтобы переписать";
+      txt.addEventListener("click", () => setCursiveTarget(lig));
+
+      const del = document.createElement("span");
+      del.className = "tag-delete";
+      del.textContent = "✕";
+      del.title = "Удалить эту связку";
+      del.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        if (!confirm(`Удалить сохранённую связку «${lig}»?`)) return;
+        try {
+          await api.deleteSample(lig);
+          userLigatures = userLigatures.filter((item) => item !== lig);
+          renderUserLigaturesList();
+          await loadCursivePresets();
+        } catch (err) {
+          alert("Ошибка удаления: " + err.message);
+        }
+      });
+
+      tag.appendChild(txt);
+      tag.appendChild(del);
+      userLigaturesList.appendChild(tag);
+    });
+  }
+
+  async function triggerCursiveTestPreview(text) {
+    if (!cursiveTestPreviewBox || !cursiveTestImg) return;
+    const testText = (text || (cursiveTestInput ? cursiveTestInput.value : "") || "Привет, как дела?").trim();
+    if (!testText) return;
+
+    cursiveTestPreviewBox.classList.remove("hidden");
+    cursiveTestImg.style.opacity = "0.5";
+
+    try {
+      const res = await api.generatePreview(testText, isCursivePreview, selectedDensity);
+      cursiveTestImg.src = res.data_url;
+      cursiveTestImg.style.opacity = "1";
+    } catch (err) {
+      cursiveTestImg.style.opacity = "1";
+    }
+  }
+
+  async function initCursiveTraining() {
+    initCursiveCanvas();
+    await loadCursivePresets();
+
+    // Переключение между буквами и связками
+    if (trainSubtabs) {
+      setupTabs(trainSubtabs, "traintab", (tab) => {
+        if (trainLettersPanel) trainLettersPanel.classList.toggle("hidden", tab !== "letters");
+        if (trainCursivePanel) trainCursivePanel.classList.toggle("hidden", tab !== "cursive");
+        if (tab === "cursive") {
+          setCursiveTarget(currentCursiveText || "Съешь ещё этих мягких французских булок");
+        }
+      });
+    }
+
+    if (cursiveClearBtn) {
+      cursiveClearBtn.addEventListener("click", clearCursiveCanvas);
+    }
+
+    if (cursiveUndoBtn) {
+      cursiveUndoBtn.addEventListener("click", () => {
+        if (cursiveStrokes.length > 0) {
+          cursiveStrokes.pop();
+          redrawCursiveStrokes();
+        }
+      });
+    }
+
+    if (customCursiveBtn && customCursiveInput) {
+      const applyCustom = () => {
+        const val = customCursiveInput.value.trim();
+        if (val) {
+          setCursiveTarget(val);
+        }
+      };
+      customCursiveBtn.addEventListener("click", applyCustom);
+      customCursiveInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          applyCustom();
+        }
+      });
+    }
+
+    if (cursiveSaveBtn) {
+      cursiveSaveBtn.addEventListener("click", async () => {
+        if (!cursiveHasStrokes) {
+          cursiveTrainMsg.textContent = "Сначала напишите текст от руки на холсте.";
+          return;
+        }
+
+        cursiveSaveBtn.disabled = true;
+        cursiveTrainMsg.textContent = "Анализируем соединения и сохраняем связки...";
+
+        try {
+          const dataUrl = cursiveDrawCanvas.toDataURL("image/png");
+          const res = await api.saveSample(currentCursiveText, dataUrl, true);
+
+          if (!userLigatures.includes(currentCursiveText) && currentCursiveText.length > 1) {
+            userLigatures.push(currentCursiveText);
+            renderUserLigaturesList();
+          }
+
+          cursiveTrainMsg.textContent =
+            "✨ Связки сохранены! Почерк обучен слитным переходам букв. Проверьте результат ниже:";
+          await loadCursivePresets();
+          await triggerCursiveTestPreview(currentCursiveText);
+        } catch (err) {
+          cursiveTrainMsg.textContent = `Ошибка: ${err.message}`;
+        } finally {
+          cursiveSaveBtn.disabled = false;
+        }
+      });
+    }
+
+    // Интерактивный тест слитности
+    if (cursiveTestBtn) {
+      cursiveTestBtn.addEventListener("click", () => {
+        triggerCursiveTestPreview(cursiveTestInput ? cursiveTestInput.value : "");
+      });
+    }
+
+    if (testPreviewCursive && testPreviewSeparate) {
+      testPreviewCursive.addEventListener("click", () => {
+        isCursivePreview = true;
+        testPreviewCursive.classList.add("active");
+        testPreviewSeparate.classList.remove("active");
+        triggerCursiveTestPreview(cursiveTestInput ? cursiveTestInput.value : "");
+      });
+
+      testPreviewSeparate.addEventListener("click", () => {
+        isCursivePreview = false;
+        testPreviewSeparate.classList.add("active");
+        testPreviewCursive.classList.remove("active");
+        triggerCursiveTestPreview(cursiveTestInput ? cursiveTestInput.value : "");
+      });
+    }
+  }
 
   // ---------- Init ----------
   checkSession();
