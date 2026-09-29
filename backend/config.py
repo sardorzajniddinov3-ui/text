@@ -11,23 +11,23 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 class Config:
-    # Секретный ключ для сессий/cookie. В продакшене задайте свой через переменную окружения.
+    # Секретный ключ для сессий/cookie
     SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-change-me")
 
-    # База данных (по умолчанию — файл SQLite рядом с проектом)
+    # База данных (из переменной окружения DATABASE_URL или локальная SQLite)
     SQLALCHEMY_DATABASE_URI = os.environ.get(
         "DATABASE_URL", f"sqlite:///{os.path.join(BASE_DIR, 'handwriting.db')}"
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
-    # Куда сохраняются образцы букв пользователей и сгенерированные файлы
+    # Папки для файлов
     UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", os.path.join(BASE_DIR, "uploads"))
     GENERATED_FOLDER = os.environ.get("GENERATED_FOLDER", os.path.join(BASE_DIR, "generated"))
 
-    # Ключ Google Cloud Vision API для распознавания текста на фото (OCR)
+    # Ключ Google Cloud Vision API
     GOOGLE_VISION_API_KEY = os.environ.get("GOOGLE_VISION_API_KEY", "")
 
-    # Supabase (для Storage и Admin API)
+    # Supabase (только из переменных окружения)
     SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
     SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
 
