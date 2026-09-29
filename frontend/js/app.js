@@ -112,6 +112,7 @@
     await initTraining();
     await initCursiveTraining();
     await initPapers();
+    await initMathToolbar();
   }
 
   function showAuth() {
@@ -634,6 +635,108 @@
       generateRecognizedBtn.disabled = false;
     }
   });
+
+  // ===================================================================
+  // Высшая математика и формулы
+  // ===================================================================
+  const toggleMathPanelBtn = document.getElementById("toggle-math-panel-btn");
+  const mathPanelBody = document.getElementById("math-panel-body");
+  const mathPresetsSelect = document.getElementById("math-presets-select");
+  const insertMathPresetBtn = document.getElementById("insert-math-preset-btn");
+  const mathPreviewBox = document.getElementById("math-preview-box");
+  const mathPreviewImg = document.getElementById("math-preview-img");
+  const mathPreviewLabel = document.getElementById("math-preview-formula-label");
+  let mathPresetsList = [];
+
+  function insertTextAtCursor(textarea, textToInsert) {
+    const start = textarea.selectionStart || 0;
+    const end = textarea.selectionEnd || 0;
+    const val = textarea.value;
+    textarea.value = val.substring(0, start) + textToInsert + val.substring(end);
+    textarea.selectionStart = textarea.selectionEnd = start + textToInsert.length;
+    textarea.focus();
+    updateMathPreview();
+  }
+
+  let mathPreviewTimeout = null;
+  function updateMathPreview(explicitFormula = null) {
+    clearTimeout(mathPreviewTimeout);
+    mathPreviewTimeout = setTimeout(async () => {
+      let formula = explicitFormula;
+      if (!formula && textInput) {
+        const text = textInput.value;
+        const matches = text.match(/(\$\$.*?\$\$|\\\[.*?\\\]|\$.*?\$)/g);
+        if (matches && matches.length > 0) {
+          formula = matches[matches.length - 1];
+        }
+      }
+      if (!formula) {
+        if (mathPreviewBox) mathPreviewBox.classList.add("hidden");
+        return;
+      }
+      try {
+        const res = await api.getMathPreview(formula);
+        if (res.ok && res.image && mathPreviewBox && mathPreviewImg) {
+          mathPreviewImg.src = res.image;
+          if (mathPreviewLabel) mathPreviewLabel.textContent = formula;
+          mathPreviewBox.classList.remove("hidden");
+        }
+      } catch (err) {
+        // ignore preview render glitches
+      }
+    }, 200);
+  }
+
+  async function initMathToolbar() {
+    if (toggleMathPanelBtn && mathPanelBody) {
+      toggleMathPanelBtn.addEventListener("click", () => {
+        mathPanelBody.classList.toggle("hidden");
+      });
+    }
+
+    try {
+      const data = await api.getMathPresets();
+      mathPresetsList = data.presets || [];
+      if (mathPresetsSelect && mathPresetsList.length > 0) {
+        mathPresetsSelect.innerHTML = '<option value="">-- Выберите задачу / формулу --</option>';
+        mathPresetsList.forEach((preset, idx) => {
+          const opt = document.createElement("option");
+          opt.value = idx;
+          opt.textContent = `[${preset.category}] ${preset.title}`;
+          mathPresetsSelect.appendChild(opt);
+        });
+      }
+    } catch (e) {
+      console.warn("Could not load math presets:", e);
+    }
+
+    if (insertMathPresetBtn && mathPresetsSelect) {
+      insertMathPresetBtn.addEventListener("click", () => {
+        const idx = mathPresetsSelect.value;
+        if (idx !== "" && mathPresetsList[idx]) {
+          const preset = mathPresetsList[idx];
+          const snippet = preset.snippet || `$$${preset.latex}$$`;
+          insertTextAtCursor(textInput, "\n" + snippet + "\n");
+          updateMathPreview(snippet);
+        }
+      });
+    }
+
+    // Обработчики кнопок-чипов
+    document.querySelectorAll(".math-chip-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const latex = btn.dataset.latex || btn.textContent.trim();
+        insertTextAtCursor(textInput, " " + latex + " ");
+        updateMathPreview(latex);
+      });
+    });
+
+    if (textInput) {
+      textInput.addEventListener("input", () => {
+        updateMathPreview();
+      });
+    }
+  }
 
   // ===================================================================
   // Обучение слитности и связкам букв (Cursive Training)

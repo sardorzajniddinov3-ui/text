@@ -1102,3 +1102,162 @@ a.btn-primary, a.btn-secondary {
   font-weight: 500;
 }
 
+/* ===================================================================
+   Панель высшей математики и формул
+   =================================================================== */
+.math-toolbar-card {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.math-toolbar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.math-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.96rem;
+  color: #1e293b;
+}
+
+.math-badge {
+  background: #e0e7ff;
+  color: #4338ca;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+}
+
+.math-presets-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+  background: #ffffff;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.math-presets-row label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.math-presets-row select {
+  flex: 1;
+  min-width: 240px;
+  font-size: 0.86rem;
+  padding: 6px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  color: #0f172a;
+}
+
+.math-categories {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.math-cat-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.math-cat-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #64748b;
+  min-width: 130px;
+}
+
+.math-chip-btn {
+  font-family: "Cambria Math", "Latin Modern Math", "STIXGeneral", serif;
+  font-size: 0.88rem;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 4px 10px;
+  color: #1e293b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.math-chip-btn:hover {
+  background: #eef2ff;
+  border-color: #6366f1;
+  color: #4338ca;
+  transform: translateY(-1px);
+}
+
+.math-chip-btn:active {
+  transform: translateY(0);
+}
+
+.math-preview-box {
+  margin-top: 14px;
+  background: #ffffff;
+  border: 1px dashed #6366f1;
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.math-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: #4338ca;
+  font-weight: 600;
+}
+
+.math-preview-content {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fdfdfe;
+  background-image: repeating-linear-gradient(
+    transparent,
+    transparent 23px,
+    rgba(99, 102, 241, 0.12) 24px
+  );
+  border-radius: 6px;
+  padding: 8px;
+  overflow-x: auto;
+}
+
+.math-preview-content img {
+  max-height: 80px;
+  object-fit: contain;
+}
+
+.math-hint {
+  font-size: 0.78rem;
+  color: #64748b;
+  margin-top: 8px;
+  line-height: 1.4;
+}
+
+

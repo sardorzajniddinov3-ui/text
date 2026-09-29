@@ -1,6 +1,11 @@
+import io
 import os
 import random
+import re
 
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 from PIL import Image, ImageChops, ImageDraw, ImageOps
 
 # Размеры листа приблизительно как А4 при 150 dpi
@@ -275,6 +280,116 @@ def _tokenize_word(word, sample_paths):
     return tokens
 
 
+def render_math_to_image(latex_expr, target_height=58, ink_color=(34, 40, 59), dpi=180):
+    """
+    Рендерит математическое выражение (формулы высшей математики)
+    в прозрачное изображение с рукописным стилем нанесения чернил.
+    """
+    if not latex_expr:
+        return Image.new("RGBA", (1, 1), (0, 0, 0, 0))
+
+    expr = latex_expr.strip()
+    # Восстанавливаем символы, если строка была передана через сырой парсер
+    expr = expr.replace("\x0c", r"\f").replace("\a", r"\a").replace("\b", r"\b")
+    if expr.startswith("$$") and expr.endswith("$$") and len(expr) > 4:
+        expr = expr[2:-2].strip()
+    elif expr.startswith(r"\[") and expr.endswith(r"\]") and len(expr) > 4:
+        expr = expr[2:-2].strip()
+    elif expr.startswith("$") and expr.endswith("$") and len(expr) > 2:
+        expr = expr[1:-1].strip()
+
+    r, g, b = (ink_color[0], ink_color[1], ink_color[2]) if len(ink_color) >= 3 else (34, 40, 59)
+    hex_color = f"#{r:02x}{g:02x}{b:02x}"
+
+    img = None
+    # 1. Пробуем отрендерить через Mathtext
+    try:
+        fig = plt.figure(figsize=(0.01, 0.01), dpi=dpi)
+        fig.patch.set_alpha(0.0)
+        # Оборачиваем в $ для движка mathtext
+        fig.text(0.5, 0.5, f"${expr}$", fontsize=20, color=hex_color, ha="center", va="center")
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", transparent=True, bbox_inches="tight", pad_inches=0.03, dpi=dpi)
+        plt.close(fig)
+        buf.seek(0)
+        img = Image.open(buf).convert("RGBA")
+    except Exception:
+        # 2. Если в формуле опечатка или TeX ошибка, рендерим как текст
+        try:
+            plt.close(fig)
+        except Exception:
+            pass
+        try:
+            fig = plt.figure(figsize=(0.01, 0.01), dpi=dpi)
+            fig.patch.set_alpha(0.0)
+            fig.text(0.5, 0.5, expr, fontsize=16, color=hex_color, ha="center", va="center")
+            buf = io.BytesIO()
+            fig.savefig(buf, format="png", transparent=True, bbox_inches="tight", pad_inches=0.03, dpi=dpi)
+            plt.close(fig)
+            buf.seek(0)
+            img = Image.open(buf).convert("RGBA")
+        except Exception:
+            return Image.new("RGBA", (1, 1), (0, 0, 0, 0))
+
+    if not img:
+        return Image.new("RGBA", (1, 1), (0, 0, 0, 0))
+
+    # Органичное масштабирование под высоту строки в тетради
+    w, h = img.size
+    if h > 0:
+        # Для многоэтажных формул (интегралы с пределами, дроби, матрицы) допускаем высоту до 1.4 строки
+        scale = max(0.35, min(1.3, (target_height * 1.1) / float(h)))
+        new_w = max(1, int(w * scale))
+        new_h = max(1, int(h * scale))
+        img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+
+    # Небольшой естественный рукописный микро-наклон
+    angle = random.uniform(-0.5, 0.5)
+    img = img.rotate(angle, expand=True, resample=Image.BICUBIC)
+    return img
+
+
+def _parse_line_tokens(paragraph):
+    """
+    Разбивает строку текста на фрагменты: обычные слова и формулы высшей математики
+    ($...$, $$...$$, \\[...\\] или чистые LaTeX команды).
+    """
+    if not paragraph.strip():
+        return []
+
+    # Проверяем, является ли весь абзац блочной формулой
+    clean_p = paragraph.strip()
+    if (clean_p.startswith("$$") and clean_p.endswith("$$")) or (clean_p.startswith(r"\[") and clean_p.endswith(r"\]")):
+        return [{"type": "math", "latex": clean_p, "is_block": True}]
+
+    # Проверяем строки, начинающиеся с ключевых математических операторов без $
+    if (
+        clean_p.startswith(r"\int")
+        or clean_p.startswith(r"\lim")
+        or clean_p.startswith(r"\sum")
+        or clean_p.startswith(r"\frac")
+        or clean_p.startswith(r"\begin")
+    ):
+        return [{"type": "math", "latex": clean_p, "is_block": True}]
+
+    pattern = r"(\$\$.*?\$\$|\\\[.*?\\\]|\$.*?\$)"
+    parts = re.split(pattern, paragraph)
+    tokens = []
+    for part in parts:
+        if not part:
+            continue
+        if (part.startswith("$$") and part.endswith("$$")) or (part.startswith(r"\[") and part.endswith(r"\]")):
+            tokens.append({"type": "math", "latex": part, "is_block": True})
+        elif part.startswith("$") and part.endswith("$") and len(part) > 2:
+            tokens.append({"type": "math", "latex": part, "is_block": False})
+        else:
+            words = part.split(" ")
+            for w in words:
+                tokens.append({"type": "word", "text": w})
+    return tokens
+
+
+
 def render_text_to_pages(
     text,
     sample_paths,
@@ -345,10 +460,71 @@ def render_text_to_pages(
         page_draw = ImageDraw.Draw(page)
         x, y = margin_x, margin_top
 
+    math_ink_color = (34, 40, 59)
+    if cursive_profile and "ink_color" in cursive_profile:
+        try:
+            math_ink_color = tuple(cursive_profile["ink_color"][:3])
+        except Exception:
+            pass
+
     paragraphs = text.replace("\r\n", "\n").split("\n")
     for p_index, paragraph in enumerate(paragraphs):
-        words = paragraph.split(" ")
-        for w_index, word in enumerate(words):
+        line_items = _parse_line_tokens(paragraph)
+        if not line_items:
+            x = margin_x
+            y += line_height
+            if y + line_height > PAGE_HEIGHT - margin_bottom:
+                new_page()
+            continue
+
+        for item_index, item in enumerate(line_items):
+            if item["type"] == "math":
+                is_block = item.get("is_block", False)
+                formula_target_h = int(line_height * 1.35) if is_block else int(line_height * 1.1)
+                math_img = render_math_to_image(item["latex"], target_height=formula_target_h, ink_color=math_ink_color)
+
+                # Если это блочная формула (например, $$...$$ или отдельная строка формулы)
+                if is_block:
+                    if x > margin_x:
+                        x = margin_x
+                        y += line_height
+                        if y + line_height > PAGE_HEIGHT - margin_bottom:
+                            new_page()
+
+                    avail_w = PAGE_WIDTH - 2 * margin_x
+                    if math_img.width > avail_w:
+                        scale_factor = avail_w / float(math_img.width)
+                        math_img = math_img.resize((avail_w, max(1, int(math_img.height * scale_factor))), Image.Resampling.LANCZOS)
+
+                    fx = margin_x + max(0, (avail_w - math_img.width) // 2)
+                    if y + math_img.height > PAGE_HEIGHT - margin_bottom:
+                        new_page()
+
+                    page.alpha_composite(math_img, (fx, y))
+                    y += max(line_height, math_img.height + 10)
+                    x = margin_x
+                    continue
+
+                # Если это инлайн формула ($...$)
+                if x + math_img.width > PAGE_WIDTH - margin_x and x > margin_x:
+                    x = margin_x
+                    y += line_height
+                    if y + line_height > PAGE_HEIGHT - margin_bottom:
+                        new_page()
+
+                baseline_y = y + line_ascent
+                fy = max(y, baseline_y - int(math_img.height * 0.72))
+                if y + math_img.height > PAGE_HEIGHT - margin_bottom:
+                    new_page()
+                    baseline_y = y + line_ascent
+                    fy = max(y, baseline_y - int(math_img.height * 0.72))
+
+                page.alpha_composite(math_img, (x, fy))
+                x += math_img.width + space_width
+                continue
+
+            # Обычное слово
+            word = item.get("text", "")
             if not word:
                 x += space_width
                 continue
@@ -428,11 +604,11 @@ def render_text_to_pages(
                         _draw_cursive_connector(page_draw, p0, p1, g1.ink_color, width=conn_width)
 
             # Накладываем сами символы
-            for item in word_positions:
-                page.alpha_composite(item["rotated"], (item["x"], item["y"]))
+            for itm in word_positions:
+                page.alpha_composite(itm["rotated"], (itm["x"], itm["y"]))
 
             x = cur_x
-            if w_index != len(words) - 1:
+            if item_index != len(line_items) - 1:
                 x += space_width
 
         # Переход на новую строку после абзаца

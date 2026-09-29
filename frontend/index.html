@@ -226,7 +226,99 @@
       </div>
 
       <div id="source-text" class="source-panel">
-        <textarea id="text-input" rows="6" placeholder="Введите или вставьте текст..."></textarea>
+        <!-- Панель высшей математики -->
+        <div class="math-toolbar-card">
+          <div class="math-toolbar-header">
+            <div class="math-title-wrap">
+              <span>📐</span>
+              <strong>Высшая математика и формулы</strong>
+              <span class="math-badge">Матанализ &amp; LaTeX</span>
+            </div>
+            <button type="button" id="toggle-math-panel-btn" class="density-btn">Скрыть / Показать</button>
+          </div>
+
+          <div id="math-panel-body" class="math-panel-body">
+            <!-- Готовые примеры высшей математики -->
+            <div class="math-presets-row">
+              <label for="math-presets-select">Готовые примеры:</label>
+              <select id="math-presets-select">
+                <option value="">-- Выберите задачу / формулу --</option>
+              </select>
+              <button type="button" id="insert-math-preset-btn" class="btn-secondary">Вставить</button>
+            </div>
+
+            <!-- Быстрые кнопки для математических символов -->
+            <div class="math-categories">
+              <div class="math-cat-group">
+                <span class="math-cat-title">Интегралы:</span>
+                <button type="button" class="math-chip-btn" data-latex="$\int_{a}^{b} f(x)\,dx$">∫ f(x)dx</button>
+                <button type="button" class="math-chip-btn" data-latex="$\iint_{D} f(x,y)\,dx\,dy$">∬ dxdy</button>
+                <button type="button" class="math-chip-btn" data-latex="$\int_{0}^{\infty} e^{-x^2}\,dx$">∫[0,∞]</button>
+                <button type="button" class="math-chip-btn" data-latex="$\frac{\partial f}{\partial x}$">∂f/∂x</button>
+                <button type="button" class="math-chip-btn" data-latex="$\frac{df}{dx}$">df/dx</button>
+              </div>
+
+              <div class="math-cat-group">
+                <span class="math-cat-title">Пределы и ряды:</span>
+                <button type="button" class="math-chip-btn" data-latex="$\lim_{x \to 0} \frac{\sin x}{x} = 1$">lim[x→0]</button>
+                <button type="button" class="math-chip-btn" data-latex="$\lim_{n \to \infty} \left(1 + \frac{1}{n}\right)^n = e$">lim[n→∞]</button>
+                <button type="button" class="math-chip-btn" data-latex="$\sum_{n=1}^{\infty} \frac{1}{n^2}$">∑[n=1,∞]</button>
+                <button type="button" class="math-chip-btn" data-latex="$\prod_{i=1}^{n} a_i$">∏[1,n]</button>
+              </div>
+
+              <div class="math-cat-group">
+                <span class="math-cat-title">Дроби и корни:</span>
+                <button type="button" class="math-chip-btn" data-latex="$\frac{a}{b}$">a/b</button>
+                <button type="button" class="math-chip-btn" data-latex="$\sqrt{x^2 + y^2}$">√x</button>
+                <button type="button" class="math-chip-btn" data-latex="$\sqrt[n]{x}$">ⁿ√x</button>
+                <button type="button" class="math-chip-btn" data-latex="$x^{n}$">xⁿ</button>
+                <button type="button" class="math-chip-btn" data-latex="$x_{i}$">xᵢ</button>
+              </div>
+
+              <div class="math-cat-group">
+                <span class="math-cat-title">Греческие буквы:</span>
+                <button type="button" class="math-chip-btn" data-latex="$\alpha$">α</button>
+                <button type="button" class="math-chip-btn" data-latex="$\beta$">β</button>
+                <button type="button" class="math-chip-btn" data-latex="$\gamma$">γ</button>
+                <button type="button" class="math-chip-btn" data-latex="$\delta$">δ</button>
+                <button type="button" class="math-chip-btn" data-latex="$\lambda$">λ</button>
+                <button type="button" class="math-chip-btn" data-latex="$\pi$">π</button>
+                <button type="button" class="math-chip-btn" data-latex="$\theta$">θ</button>
+                <button type="button" class="math-chip-btn" data-latex="$\Delta$">Δ</button>
+                <button type="button" class="math-chip-btn" data-latex="$\Sigma$">Σ</button>
+              </div>
+
+              <div class="math-cat-group">
+                <span class="math-cat-title">Алгебра и матрицы:</span>
+                <button type="button" class="math-chip-btn" data-latex="$\begin{pmatrix} a &amp; b \\ c &amp; d \end{pmatrix}$">Матрица 2×2</button>
+                <button type="button" class="math-chip-btn" data-latex="$\begin{cases} x + y = 1 \\ x - y = 0 \end{cases}$">Система {</button>
+                <button type="button" class="math-chip-btn" data-latex="$\pm$">±</button>
+                <button type="button" class="math-chip-btn" data-latex="$\le$">≤</button>
+                <button type="button" class="math-chip-btn" data-latex="$\ge$">≥</button>
+                <button type="button" class="math-chip-btn" data-latex="$\neq$">≠</button>
+                <button type="button" class="math-chip-btn" data-latex="$\approx$">≈</button>
+                <button type="button" class="math-chip-btn" data-latex="$\infty$">∞</button>
+              </div>
+            </div>
+
+            <!-- Живой предпросмотр формулы -->
+            <div id="math-preview-box" class="math-preview-box hidden">
+              <div class="math-preview-header">
+                <span>✍️ Рукописный вид формулы:</span>
+                <span id="math-preview-formula-label" style="font-family:monospace;font-size:0.8rem;color:#334155;"></span>
+              </div>
+              <div class="math-preview-content">
+                <img id="math-preview-img" alt="Предпросмотр формулы" />
+              </div>
+            </div>
+
+            <p class="math-hint">
+              💡 Формулы можно вставлять кнопками выше или писать вручную в формате LaTeX между <code>$формула$</code> (в строке) или <code>$$формула$$</code> (отдельной строкой по центру).
+            </p>
+          </div>
+        </div>
+
+        <textarea id="text-input" rows="6" placeholder="Введите или вставьте текст (поддерживаются формулы $...$ и $$...$$)..."></textarea>
         <button id="generate-text-btn" class="btn-primary" type="button">Написать моим почерком</button>
       </div>
 

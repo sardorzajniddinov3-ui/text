@@ -198,3 +198,39 @@ def download(filename):
         return jsonify(error="Некорректное имя файла"), 400
     folder = os.path.join(current_app.config["GENERATED_FOLDER"], str(current_user.id))
     return send_from_directory(folder, filename)
+
+
+@generate_bp.get("/math-presets")
+def get_math_presets():
+    """Возвращает популярные формулы и шаблоны высшей математики."""
+    from alphabet import MATH_PRESETS, MATH_SYMBOLS
+    return jsonify(presets=MATH_PRESETS, symbols=MATH_SYMBOLS)
+
+
+@generate_bp.post("/math-preview")
+def math_preview():
+    """Генерирует мгновенный рукописный предпросмотр введенной математической формулы."""
+    data = request.get_json(force=True, silent=True) or {}
+    formula = (data.get("formula") or "").strip()
+    if not formula:
+        return jsonify(error="Формула не указана"), 400
+
+    ink_color = (34, 40, 59)
+    if current_user.is_authenticated and getattr(current_user, "cursive_profile", None):
+        try:
+            prof = json.loads(current_user.cursive_profile)
+            if "ink_color" in prof and len(prof["ink_color"]) >= 3:
+                ink_color = tuple(prof["ink_color"][:3])
+        except Exception:
+            pass
+
+    import base64
+    import io
+    from render import render_math_to_image
+
+    img = render_math_to_image(formula, target_height=65, ink_color=ink_color)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+    return jsonify(ok=True, image=f"data:image/png;base64,{b64}")
+

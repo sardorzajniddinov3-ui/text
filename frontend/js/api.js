@@ -70,4 +70,7 @@ const api = {
     form.append("cursive_density", cursiveDensity);
     return apiRequest("/api/generate/photo", { method: "POST", body: form, isFormData: true });
   },
+
+  getMathPresets: () => apiRequest("/api/generate/math-presets"),
+  getMathPreview: (formula) => apiRequest("/api/generate/math-preview", { method: "POST", body: { formula } }),
 };
