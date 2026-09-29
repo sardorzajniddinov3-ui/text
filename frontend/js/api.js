@@ -52,22 +52,24 @@ const api = {
   getCursivePresets: () => apiRequest("/api/samples/cursive-presets"),
   getCursiveProfile: () => apiRequest("/api/samples/cursive-profile"),
   updateCursiveProfile: (profile) => apiRequest("/api/samples/cursive-profile", { method: "POST", body: profile }),
-  generatePreview: (text, cursive = true, cursiveDensity = "standard") =>
-    apiRequest("/api/generate/preview", { method: "POST", body: { text, cursive, cursive_density: cursiveDensity } }),
+  generatePreview: (text, cursive = true, cursiveDensity = "standard", style = "my_handwriting") =>
+    apiRequest("/api/generate/preview", { method: "POST", body: { text, cursive, cursive_density: cursiveDensity, style } }),
 
   getPapers: () => apiRequest("/api/generate/papers"),
-  generateFromText: (text, paper, fontSize, cursive = true, cursiveDensity = "standard") =>
+  getStyles: () => apiRequest("/api/generate/styles"),
+  generateFromText: (text, paper, fontSize, cursive = true, cursiveDensity = "standard", style = "my_handwriting") =>
     apiRequest("/api/generate/text", {
       method: "POST",
-      body: { text, paper, font_size: fontSize, cursive, cursive_density: cursiveDensity },
+      body: { text, paper, font_size: fontSize, cursive, cursive_density: cursiveDensity, style },
     }),
-  generateFromPhoto: (file, paper, fontSize, cursive = true, cursiveDensity = "standard") => {
+  generateFromPhoto: (file, paper, fontSize, cursive = true, cursiveDensity = "standard", style = "my_handwriting") => {
     const form = new FormData();
     form.append("photo", file);
     form.append("paper", paper);
     if (fontSize) form.append("font_size", fontSize);
     form.append("cursive", cursive ? "true" : "false");
     form.append("cursive_density", cursiveDensity);
+    form.append("style", style);
     return apiRequest("/api/generate/photo", { method: "POST", body: form, isFormData: true });
   },
 

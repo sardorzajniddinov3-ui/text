@@ -8,7 +8,9 @@ from ocr import OcrError, recognize_text_from_image
 from render import (
     DEFAULT_FONT_SIZE,
     DEFAULT_PAPER,
+    DEFAULT_STYLE,
     list_font_sizes,
+    list_handwriting_styles,
     list_paper_styles,
     render_text_to_pages,
     save_pdf,
@@ -32,10 +34,11 @@ def _render_and_save(
     font_size=DEFAULT_FONT_SIZE,
     cursive=True,
     cursive_density="standard",
+    style=DEFAULT_STYLE,
 ):
     samples = _sample_paths_for_current_user()
-    if not samples:
-        return None, "Сначала запишите свой почерк на странице «Обучение» — нужна хотя бы пара букв"
+    if not samples and style == "my_handwriting":
+        return None, "В режиме «Мой личный почерк» нужны сохранённые буквы. Запишите их на вкладке «Обучение» или выберите один из 5 готовых стилей почерка!"
 
     profile = None
     if getattr(current_user, "cursive_profile", None):
@@ -52,6 +55,7 @@ def _render_and_save(
         cursive=cursive,
         cursive_density=cursive_density,
         cursive_profile=profile,
+        style=style,
     )
 
     folder = os.path.join(current_app.config["GENERATED_FOLDER"], str(current_user.id))
@@ -77,7 +81,15 @@ def get_papers():
         default=DEFAULT_PAPER,
         font_sizes=list_font_sizes(),
         default_font_size=DEFAULT_FONT_SIZE,
+        styles=list_handwriting_styles(),
+        default_style=DEFAULT_STYLE,
     )
+
+
+@generate_bp.get("/styles")
+def get_styles():
+    """Возвращает 5 готовых стилей почерка + режим личного почерка."""
+    return jsonify(styles=list_handwriting_styles(), default_style=DEFAULT_STYLE)
 
 
 @generate_bp.post("/preview")
@@ -92,10 +104,12 @@ def generate_preview():
     cursive = data.get("cursive", True)
     cursive_density = data.get("cursive_density") or "standard"
     font_size = data.get("font_size") or DEFAULT_FONT_SIZE
+    style = data.get("style") or DEFAULT_STYLE
 
     samples = _sample_paths_for_current_user()
-    if not samples:
-        return jsonify(error="Пока нет сохранённых образцов букв"), 400
+    if not samples and style == "my_handwriting":
+        # Если в режиме личного почерка еще нет букв, временно используем каллиграфический превью
+        style = "calligraphy"
 
     profile = None
     if getattr(current_user, "cursive_profile", None):
@@ -112,6 +126,7 @@ def generate_preview():
         cursive=cursive,
         cursive_density=cursive_density,
         cursive_profile=profile,
+        style=style,
     )
 
     buf = io.BytesIO()
@@ -134,6 +149,7 @@ def generate_from_text():
     if isinstance(cursive, str):
         cursive = cursive.lower() in ("true", "1", "yes")
     cursive_density = data.get("cursive_density") or "standard"
+    style = data.get("style") or DEFAULT_STYLE
 
     if not text:
         return jsonify(error="Введите текст для перевода в почерк"), 400
@@ -146,6 +162,7 @@ def generate_from_text():
         font_size=font_size,
         cursive=cursive,
         cursive_density=cursive_density,
+        style=style,
     )
     if error:
         return jsonify(error=error), 400
@@ -168,6 +185,7 @@ def generate_from_photo():
     cursive_val = request.form.get("cursive", "true")
     cursive = cursive_val.lower() in ("true", "1", "yes")
     cursive_density = request.form.get("cursive_density") or "standard"
+    style = request.form.get("style") or DEFAULT_STYLE
 
     try:
         text = recognize_text_from_image(image_bytes)
@@ -183,6 +201,7 @@ def generate_from_photo():
         font_size=font_size,
         cursive=cursive,
         cursive_density=cursive_density,
+        style=style,
     )
     if error:
         return jsonify(error=error), 400

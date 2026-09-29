@@ -6,7 +6,7 @@ import re
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from PIL import Image, ImageChops, ImageDraw, ImageOps
+from PIL import Image, ImageChops, ImageDraw, ImageOps, ImageFont
 
 # Размеры листа приблизительно как А4 при 150 dpi
 PAGE_WIDTH = 1240
@@ -152,6 +152,131 @@ def list_paper_styles():
 
 def list_font_sizes():
     return [{"key": k, "label": v["label"]} for k, v in FONT_PRESETS.items()]
+
+
+HANDWRITING_STYLES = {
+    "my_handwriting": {
+        "id": "my_handwriting",
+        "name": "Мой личный почерк",
+        "badge": "Обученный",
+        "description": "Собственные буквы и связки, сохранённые в профиле",
+        "font_family": "'Marck Script', cursive",
+        "font_file": "MarckScript-Regular.ttf",
+        "sample_preview": "Мой личный почерк",
+        "use_samples": True,
+    },
+    "calligraphy": {
+        "id": "calligraphy",
+        "name": "Школьный каллиграфический",
+        "badge": "Прописи",
+        "description": "Классические ровные школьные прописи с правильным наклоном",
+        "font_family": "'Marck Script', cursive",
+        "font_file": "MarckScript-Regular.ttf",
+        "sample_preview": "Школьные прописи",
+        "use_samples": False,
+    },
+    "student": {
+        "id": "student",
+        "name": "Студенческий конспект",
+        "badge": "Быстрый",
+        "description": "Живой, беглый лекционный почерк студента",
+        "font_family": "'Caveat', cursive",
+        "font_file": "Caveat.ttf",
+        "sample_preview": "Студенческий конспект",
+        "use_samples": False,
+    },
+    "casual": {
+        "id": "casual",
+        "name": "Повседневный блокнот",
+        "badge": "Мягкий",
+        "description": "Непринуждённый мягкий почерк гелевой ручкой",
+        "font_family": "'Bad Script', cursive",
+        "font_file": "BadScript.ttf",
+        "sample_preview": "Заметки в блокноте",
+        "use_samples": False,
+    },
+    "architect": {
+        "id": "architect",
+        "name": "Чертёжный полупечатный",
+        "badge": "Чёткий",
+        "description": "Чёткий, аккуратный архитектурный стиль, идеален для формул",
+        "font_family": "'Neucha', cursive",
+        "font_file": "Neucha.ttf",
+        "sample_preview": "Чертёжный полупечатный",
+        "use_samples": False,
+    },
+    "expressive": {
+        "id": "expressive",
+        "name": "Размашистый авторский",
+        "badge": "Широкий",
+        "description": "Крупный, плавный, округлый почерк с широким шагом",
+        "font_family": "'Pacifico', cursive",
+        "font_file": "Pacifico-Regular.ttf",
+        "sample_preview": "Размашистый почерк",
+        "use_samples": False,
+    },
+}
+DEFAULT_STYLE = "my_handwriting"
+
+
+def list_handwriting_styles():
+    return list(HANDWRITING_STYLES.values())
+
+
+def _find_font_path(filename):
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        os.path.join(base_dir, "fonts", filename),
+        os.path.join(os.path.dirname(base_dir), "frontend", "fonts", filename),
+        os.path.join(base_dir, filename),
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return None
+
+
+def _render_font_glyph(char, font_path, scale=0.21, ink_color=(34, 40, 59)):
+    if not font_path or not os.path.exists(font_path):
+        return None
+    try:
+        font = ImageFont.truetype(font_path, 150)
+    except Exception:
+        return None
+
+    canvas_w, canvas_h = 260, 260
+    im = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+
+    r, g, b = (ink_color[0], ink_color[1], ink_color[2]) if len(ink_color) >= 3 else (34, 40, 59)
+    d.text((40, 45), char, fill=(r, g, b, 240), font=font)
+
+    crop_box = im.getbbox()
+    if not crop_box:
+        return None
+
+    cropped = im.crop((crop_box[0], 0, crop_box[2], canvas_h))
+    w, h = cropped.size
+    if w == 0 or h == 0:
+        return None
+
+    new_w = max(1, round(w * scale))
+    new_h = max(1, round(h * scale))
+    scaled = cropped.resize((new_w, new_h), Image.Resampling.LANCZOS)
+
+    sw, sh = scaled.size
+    baseline_scaled = round(CANVAS_BASELINE * scale)
+
+    return GlyphData(
+        image=scaled,
+        exit_x=max(1, sw - 1),
+        exit_y=baseline_scaled,
+        entry_x=0,
+        entry_y=baseline_scaled,
+        ink_color=(r, g, b),
+        stroke_width=max(1.5, round(scale * 9)),
+    )
+
 
 
 class GlyphData:
@@ -398,14 +523,16 @@ def render_text_to_pages(
     cursive=True,
     cursive_density="standard",
     cursive_profile=None,
+    style=DEFAULT_STYLE,
 ):
-    """Компонует текст из образцов букв пользователя со слитными связками или раздельно.
+    """Компонует текст из выбранного стиля почерка или личных образцов букв со связками.
 
     sample_paths: dict, символ/связка -> путь к PNG файлу с образцом.
     paper: ключ варианта бумаги (см. PAPER_STYLES).
     font_size: 'compact', 'standard', 'large' или числовой масштаб (scale).
     cursive: True — слитное рукописное письмо со связками букв, False — раздельные буквы.
     cursive_density: 'tight' (плотные связки), 'standard' (естественные), 'loose' (свободные).
+    style: ключ стиля почерка (см. HANDWRITING_STYLES).
     """
     params = get_font_params(font_size)
     scale = params["scale"]
@@ -427,14 +554,28 @@ def render_text_to_pages(
     else:
         letter_gap = params["letter_spacing"]
 
+    style_cfg = HANDWRITING_STYLES.get(style) or HANDWRITING_STYLES[DEFAULT_STYLE]
+    fallback_font_file = style_cfg.get("font_file", "MarckScript-Regular.ttf")
+    fallback_font_path = _find_font_path(fallback_font_file)
+
     glyph_baseline_offset = round(CANVAS_BASELINE * scale)
     glyph_cache = {}
 
     def get_glyph(token):
         if token in glyph_cache:
             return glyph_cache[token]
-        path = sample_paths.get(token) or sample_paths.get(token.lower()) or sample_paths.get(token.upper())
-        res = _load_glyph(path, scale=scale) if path and os.path.exists(path) else None
+
+        res = None
+        # 1. Если стиль использует образцы пользователя (режим "Мой личный почерк")
+        if style_cfg.get("use_samples", True) and sample_paths:
+            path = sample_paths.get(token) or sample_paths.get(token.lower()) or sample_paths.get(token.upper())
+            if path and os.path.exists(path):
+                res = _load_glyph(path, scale=scale)
+
+        # 2. Если образец не найден или выбран конкретный рукописный стиль:
+        if res is None and fallback_font_path:
+            res = _render_font_glyph(token, fallback_font_path, scale=scale, ink_color=math_ink_color)
+
         glyph_cache[token] = res
         return res
 

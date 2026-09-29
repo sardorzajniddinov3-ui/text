@@ -50,6 +50,7 @@
   let currentIndex = 0;
   let selectedPaper = "blank";
   let selectedFontSize = "standard";
+  let selectedStyle = "my_handwriting";
   let papersLoaded = false;
 
   // Cursive state
@@ -440,6 +441,11 @@
       selectedPaper = data.default || "blank";
       renderPaperOptions(data.papers);
 
+      selectedStyle = data.default_style || "my_handwriting";
+      if (data.styles) {
+        renderStyleOptions(data.styles);
+      }
+
       selectedFontSize = data.default_font_size || "standard";
       const fontSizes = data.font_sizes || [
         { key: "compact", label: "Мелкий" },
@@ -453,6 +459,37 @@
       // если список не загрузился - остаёмся на значениях по умолчанию
       paperOptions.innerHTML = "";
     }
+  }
+
+  const styleCardsGrid = document.getElementById("style-cards-grid");
+
+  function renderStyleOptions(styles) {
+    if (!styleCardsGrid) return;
+    styleCardsGrid.innerHTML = "";
+    styles.forEach((st) => {
+      const card = document.createElement("div");
+      card.className = "style-card" + (st.id === selectedStyle ? " selected" : "");
+      card.dataset.style = st.id;
+
+      card.innerHTML = `
+        <div class="style-card-top">
+          <span class="style-card-name">${st.name}</span>
+          <span class="style-card-badge">${st.badge || "Стиль"}</span>
+        </div>
+        <div class="style-card-desc">${st.description}</div>
+        <div class="style-card-preview" style="font-family: ${st.font_family};">
+          ${st.sample_preview || "Пример текста"}
+        </div>
+      `;
+
+      card.addEventListener("click", () => {
+        selectedStyle = st.id;
+        styleCardsGrid.querySelectorAll(".style-card").forEach((c) => c.classList.remove("selected"));
+        card.classList.add("selected");
+      });
+
+      styleCardsGrid.appendChild(card);
+    });
   }
 
   function renderPaperOptions(papers) {
@@ -571,7 +608,8 @@
         selectedPaper,
         selectedFontSize,
         selectedCursive,
-        selectedDensity
+        selectedDensity,
+        selectedStyle
       );
       generateMsg.textContent = "";
       showResult(result);
@@ -590,14 +628,15 @@
       return;
     }
     recognizeBtn.disabled = true;
-    generateMsg.textContent = "Распознаём текст и пишем вашим почерком...";
+    generateMsg.textContent = "Распознаём текст и пишем выбранным почерком...";
     try {
       const result = await api.generateFromPhoto(
         file,
         selectedPaper,
         selectedFontSize,
         selectedCursive,
-        selectedDensity
+        selectedDensity,
+        selectedStyle
       );
       recognizedText.value = result.recognized_text || "";
       recognizedBox.classList.remove("hidden");
@@ -618,14 +657,15 @@
       return;
     }
     generateRecognizedBtn.disabled = true;
-    generateMsg.textContent = "Пишем вашим почерком...";
+    generateMsg.textContent = "Пишем выбранным почерком...";
     try {
       const result = await api.generateFromText(
         text,
         selectedPaper,
         selectedFontSize,
         selectedCursive,
-        selectedDensity
+        selectedDensity,
+        selectedStyle
       );
       generateMsg.textContent = "";
       showResult(result);
