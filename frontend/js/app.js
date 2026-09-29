@@ -690,7 +690,8 @@
   async function initMathToolbar() {
     if (toggleMathPanelBtn && mathPanelBody) {
       toggleMathPanelBtn.addEventListener("click", () => {
-        mathPanelBody.classList.toggle("hidden");
+        const isHidden = mathPanelBody.classList.toggle("hidden");
+        toggleMathPanelBtn.textContent = isHidden ? "▼ Показать формулы" : "▲ Скрыть формулы";
       });
     }
 
